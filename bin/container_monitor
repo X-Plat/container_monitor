@@ -1,0 +1,36 @@
+#!/usr/bin/env python
+# -*- coding: iso-8859-1 -*-
+
+import os,sys
+
+#Append the lib path
+LIB_PATH = os.path.split(os.getcwd())[0] + '/lib'
+CONF_PATH = os.path.split(os.getcwd())[0] + '/conf'
+
+sys.path.append(LIB_PATH)
+sys.path.append(CONF_PATH)
+
+from conf_base import BaseConfig
+from conf_link import LinkConfig
+from conf_register import  RegisterConfig
+from xpyinotify.monitor import Monitor
+
+import logging
+import logging.config
+
+
+if __name__ == '__main__':
+    log_conf = BaseConfig['log_conf']
+
+    logging.config.fileConfig(log_conf)
+    logger = logging.getLogger("mondir")
+    try:
+        linker = Monitor(logger, LinkConfig)
+        linker.start()
+
+        register = Monitor(logger, RegisterConfig)
+        register.start()
+    except KeyboardInterrupt:
+        sys.exit
+
+    
