@@ -33,7 +33,6 @@ class ContainerLink(ProcessEvent):
         self.mkdir_dir_for_register(register_dir)
         fl = yaml.load(file(self.ins_file,'rb').read())
         self.update_bns_link(fl)
-        test_dir = self.container_base_path + '/' + 'register'
 
     def make_bns_path(self, ins):
         """
@@ -54,15 +53,18 @@ class ContainerLink(ProcessEvent):
         try:
             if not os.path.exists(dir):
                os.makedirs(dir)
-            os.remove(dir)
-        except:
-            self.logger.warn("make test dir for register task failed")
+            os.rmdir(dir)
+        except Exception, err:
+            self.logger.warn("create dir %s failed with %s" %(dir, err))
 
     def update_bns_link(self, agent_data):
         """
         generate bns link for instances
         """
         self.logger.info('Starting checking the links.')
+        if not os.path.exists(self.bns_base):
+           os.makedirs(self.bns_base)
+
         raw_links = os.listdir(self.bns_base)
         current_links = set([])
         for lk in raw_links:

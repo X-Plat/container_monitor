@@ -1,6 +1,6 @@
 # -*- coding: iso-8859-1 -*-
 import yaml, codecs, sys, os.path, optparse
-
+import re
 from pyinotify import ProcessEvent
 import etcd
 from socket import socket, SOCK_DGRAM, AF_INET
@@ -21,12 +21,13 @@ class ContainerRegister(ProcessEvent):
         self.logger.debug('ContainerRegister::process_default')
         # call base method
         super(ContainerRegister, self).process_default(event)
+
     def local_ip(self):
         """
         Get local ip
         """
         s = socket(AF_INET, SOCK_DGRAM)
-        s.connect(('api.jpaas.baidu.com', 0))
+        s.connect(('www.baidu.com', 0))
         ip = list(s.getsockname())[0]
         return ip
 
@@ -179,6 +180,18 @@ class ContainerRegister(ProcessEvent):
             else:
                pass      
 
+    def check_local_from_nodes(self, nodes):
+        """
+        get ip info from nodes
+        """
+        ip_pattern = re.compile('\/containers\/[\w]+\/ip')
+        for n in nodes:
+           if ip_pattern.match(n['key']) and n['value'] == self.local_ip():
+               return True
+           else:
+               pass
+        return False
+
     def register_with_etcd(self, agent_data):
         """
         check the container information
@@ -248,8 +261,10 @@ class ContainerRegister(ProcessEvent):
 
             con_ins_key = '/containers/' + handle + '/instance'
             con_id_key = '/containers/' + handle + '/app_id'
+            con_ip_key = '/containers/' + handle + '/ip'
             self.set_key(con_id_key, str(app_id))
             self.set_key(con_ins_key, container['instance_id'])
+            self.set_key(con_ip_key, self.local_ip())
 
         containers_keys = '/containers'
 
@@ -259,6 +274,9 @@ class ContainerRegister(ProcessEvent):
         for c in resp:
             handle = c['key'].split('/')[2]
             self.logger.debug('checking container %s' %handle)
+            if not self.check_local_from_nodes(c['nodes']): continue
+            self.logger.debug('Checking local containers %s' %handle
+)
             if handle not in containers:
                 con_key_to_del = '/containers/' + handle
                 app_id = self.get_appid_from_nodes(c['nodes'])
