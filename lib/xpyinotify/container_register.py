@@ -27,7 +27,7 @@ class ContainerRegister(ProcessEvent):
         Get local ip
         """
         s = socket(AF_INET, SOCK_DGRAM)
-        s.connect(('www.baidu.com', 0))
+        s.connect(('jpaas.baidu.com', 0))
         ip = list(s.getsockname())[0]
         return ip
 
