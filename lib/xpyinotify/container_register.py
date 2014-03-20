@@ -11,6 +11,7 @@ class ContainerRegister(ProcessEvent):
        self.handle = None
        self.container_base = config['monitor_dir']
        self.ins_file = config['instance_file']
+       self.cluster = config['cluster']
        self.etcd = etcd.Client(host=config['registry_server_ip'], 
                                port=config['registry_server_port'])
 
@@ -72,9 +73,12 @@ class ContainerRegister(ProcessEvent):
                 if not handle: continue
                 cdict[handle] = {}
                 cdict[handle]['state'] = ins.get('state')
-                cdict[handle]['app_id'] = ins.get('tags').get('bns_node')
+                cdict[handle]['app_id'] = self.cluster + '-' + ins.get('tags').get('bns_node')
                 cdict[handle]['instance_id'] = ins.get('instance_id')
                 cdict[handle]['app_name'] = ins.get('application_name')
+                cdict[handle]['instance_index'] = ins.get('instance_index')
+                cdict[handle]['warden_host_ip'] = ins.get('warden_host_ip')
+
                 cdict[handle]['state_timestamp'] = ins.get(self.right_timestamp(ins.get('state')), 0)
         except Exception,e:
            self.logger.error('Generate container info from json file failed %s' %e.message)
@@ -89,8 +93,10 @@ class ContainerRegister(ProcessEvent):
                 idict[instance_id] = {}
                 idict[instance_id]['state'] = ins.get('state')
                 idict[instance_id]['handle'] = ins.get('handle')
-                idict[instance_id]['app_id'] = ins.get('tags').get('bns_node')
+                idict[instance_id]['app_id'] = self.cluster + '-' + ins.get('tags').get('bns_node')
                 idict[instance_id]['app_name'] = ins.get('application_name')
+                idict[instance_id]['instance_index'] = ins.get('instance_index')
+                idict[instance_id]['warden_host_ip'] = ins.get('warden_host_ip')
                 idict[instance_id]['state_timestamp'] = ins.get(self.right_timestamp(ins.get('state')), 0)
         except Exception,e:
            self.logger.error('Generate instance dict from json file failed %s' %e.message)
@@ -168,9 +174,18 @@ class ContainerRegister(ProcessEvent):
 
         timestamp_key = handle_key + '/' + 'timestamp'
         timestamp_value = metadata.get('state_timestamp')
+
+        inner_ip_key = handle_key + '/' + 'inner_ip'
+        inner_ip_value = metadata.get('warden_host_ip')
+
+        instance_index_key = handle_key + '/' + 'ins_index'
+        instance_index_value = metadata.get('instance_index')
+
         self.set_key(state_key, state_value)
         self.set_key(ip_key, ip_value)
         self.set_key(timestamp_key, timestamp_value)
+        self.set_key(inner_ip_key, inner_ip_value)
+        self.set_key(instance_index_key, instance_index_value)
 
     def get_appid_from_nodes(self, nodes):
         for node in nodes:
@@ -245,7 +260,8 @@ class ContainerRegister(ProcessEvent):
             else:    
                 state_key = '/apps/' + str(app_id) + '/' + handle + '/state'
                 self.logger.debug('update state of container %s of %s' %(handle, str(app_id)))
-                self.set_key(state_key, 'STOPPED')
+                prev_state = self.check_existence(state_key).key.get('value')
+                if prev_state != 'CRASHED' : self.set_key(state_key, 'STOPPED') 
 
         #Update container in dea
         active_containers = containers & handles_in_dea
@@ -262,8 +278,12 @@ class ContainerRegister(ProcessEvent):
             con_ins_key = '/containers/' + handle + '/instance'
             con_id_key = '/containers/' + handle + '/app_id'
             con_ip_key = '/containers/' + handle + '/ip'
+            con_warden_ip_key = '/containers/' + handle + '/warden_host_ip'
+            con_index_key = '/containers/' + handle + '/ins_index'
             self.set_key(con_id_key, str(app_id))
             self.set_key(con_ins_key, container['instance_id'])
+            self.set_key(con_warden_ip_key, container['warden_host_ip'])
+            self.set_key(con_index_key, container['instance_index'])
             self.set_key(con_ip_key, self.local_ip())
 
         containers_keys = '/containers'
