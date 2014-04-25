@@ -3,8 +3,8 @@
 import os,sys
 import threading
 
-from container_link import ContainerLink
-from container_register import ContainerRegister
+from container_link import Monitor4BNS
+from container_register import Monitor4ETCD
 from pyinotify import WatchManager, Notifier, EventsCodes
 
 class Monitor(threading.Thread):
