@@ -15,11 +15,11 @@ Configs:
 
 CONFIG_BNS = {
    'task'                         : 'link',
-   'monitor_dir'                  : '/tmp/dea_ng/db',
-   'instance_file'                : '/tmp/dea_ng/db/instances.json',
+   'monitor_dir'                  : '/tmp/dea_ng/tmp/dea_ng/db',
+   'instance_file'                : '/tmp/dea_ng/tmp/dea_ng/db/instances.json',
    'bns_base'                     : '/tmp/bns',
-   'container_base_path'          : '/tmp/containers',
+   'container_base_path'          : '/tmp/warden/containers',
    'container_relative_path'      : '/tmp/rootfs/',
    'cluster_id'             : '2',
-   'bns_cluster'           : 'cluster',
+   'cluster_suffix'           : 'cluster',
 }

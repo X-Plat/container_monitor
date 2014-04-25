@@ -6,6 +6,7 @@ from functools import wraps
 from monitor.etcd.etcd_protocol import *
 from monitor.etcd.etcd_register import EtcdRegister
 from monitor.etcd.dea_data import DeaData
+from monitor.common.common import local_ip
 import traceback 
 
 Logger = None
@@ -83,7 +84,7 @@ class EtcdTask(object):
             return set([])
         data_list = os.listdir(self._base_data_path) 
         #Remove the unuseful directory no responding to containers from dataset
-        data_list = [dirn for dirn in self._white_list if dirn not in data_list]
+        data_list = [dirn for dirn in data_list if dirn not in self._white_list]
         return set(data_list)
     
     def snapshot_data_by_id(self):
@@ -92,6 +93,7 @@ class EtcdTask(object):
 
     def snapshot_data_by_warden(self):
         'return the snapshot data by warden_handle'
+        print self._input.index_by_kwd('warden_handle')
         return self._input.index_by_kwd('warden_handle')
 
     def snapshot_dataset_by_id(self):
@@ -126,7 +128,7 @@ class EtcdTask(object):
             else:
                 prefix = '/' + para
 
-            val = getattr(container, para_key)
+            val = container[para_key]
 
             #update application directory on etcd.
             self._worker.set_key(app_key + prefix, val)
@@ -134,7 +136,7 @@ class EtcdTask(object):
             self._worker.set_key(con_key + prefix, val)
 
         #update agent directory on etcd.
-        agent_key = AGENTS_DIR + '/' + getattr(container, 'ip') + '/' + handle
+        agent_key = AGENTS_DIR + '/' + container['ip'] + '/' + handle
         self._worker.set_key(agent_key, handle)
  
     def query_by_handle(self, handle, key):
@@ -245,13 +247,17 @@ class EtcdTask(object):
         """
 
         missing = self._base_dataset - self._snapshot_dataset_by_warden
+        print self._base_dataset
+        print self._snapshot_dataset_by_warden
         if len(missing): 
             Logger.debug("Found missing containers, writing to etcd.")
-
+        print 'missing '
+        print missing
         for handle in missing:
             instance_id = self.query_by_handle(handle, 'instance_id')
             app_id = self.query_by_handle(handle, 'app_id')
-
+            print 'instance_id {}'.format(instance_id)
+            print 'app_id {}'.format(app_id)
             if (not instance_id) or (not app_id): 
                 continue
 
@@ -319,7 +325,7 @@ class EtcdTask(object):
         """
         Compare local data with etcd server, to erease expired records.
         """
-        handles_in_server = self.query_handles_by_ip(DeaData.local_ip())
+        handles_in_server = self.query_handles_by_ip(local_ip())
 
         if not handles_in_server: 
             return

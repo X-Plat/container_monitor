@@ -2,7 +2,7 @@
 '''\
 container data struct
 '''
-from monitor.common import local_ip
+from monitor.common.common import local_ip
 
 class ContainerData(object):
     "The container data"

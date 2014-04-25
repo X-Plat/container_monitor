@@ -97,6 +97,7 @@ class EtcdRegister(object):
         status:  operation status, True => Success, False => Failed;
         err: error desc if occured;
         """
+        status, error = False, None
         try:
             self._etcd.delete(key, 'true')
             status = True

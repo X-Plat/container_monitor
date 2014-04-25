@@ -5,15 +5,17 @@ CONFIG_ETCD:
 Configs:
     - task: the monitor task type;
     - monitor_dir: the directory to monitor;
-    - instance_file: the instance snapshot file;
+    - snapshot_path: the instance snapshot file;
     - etcd_address: the etcd server address;
     - etcd_cluster: the cluster suff
 '''
 
 CONFIG_ETCD = {
    'task'                      : 'register',
-   'monitor_dir'               : '/tmp/containers',
-   'instance_file'             : '/tmp/dea_ng/db/instances.json',
+   'monitor_dir'               : '/tmp/warden/containers',
+   'base_data_path'            : '/tmp/warden/containers',
+   'snapshot_path'             : '/tmp/dea_ng/tmp/dea_ng/db/instances.json',
    'etcd_address'        : 'http://127.0.0.1:4001',
+   'white_list' : [ 'tmp' ],
    'etcd_cluster'          : 'test'
 }

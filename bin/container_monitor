@@ -19,7 +19,7 @@ if __name__ == '__main__':
     log_conf = CONFIG_COMMON['log_conf']
     logging.config.fileConfig(log_conf)
     logger = logging.getLogger("mondir")
-
+    #TODO: auto create log dir
     monitor_thrs = []
 
     try:
@@ -33,12 +33,12 @@ if __name__ == '__main__':
 
         monitor_thrs = [monitor_for_etcd, monitor_for_bns]
 
-    while 1:
-        alive = False
-        for idx in xrange(len(monitor_thrs)):
-            alive = alive or monitor_thrs[idx].isAlive()
-        if not alive:
-            break
+        while 1 :
+            alive = False
+            for idx in xrange(len(monitor_thrs)):
+                alive = alive or monitor_thrs[idx].isAlive()
+            if not alive:
+                break
 
     except KeyboardInterrupt:
         print 'Caught interput signal, exit...'
