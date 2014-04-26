@@ -47,7 +47,6 @@ class Monitor4BNS(ProcessEvent):
         register_dir = self.container_base_path + '/' + 'register'
         self.notify_etcd_register(register_dir)
         snapshot = ensure_read_yaml(self.ins_file)
-        print self.ins_file
         self.update_bns_link(snapshot)
 
     def make_bns_path(self, ins):
@@ -93,7 +92,6 @@ class Monitor4BNS(ProcessEvent):
             current_links.add(self.bns_base + '/' + lnk)
 
         required_links = set([])
-        print agent_data
         for ins in agent_data['instances']:
             if 'RUNNING' == ins['state']:
                 container_path = self.container_base_path + '/' + \
