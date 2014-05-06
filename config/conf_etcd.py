@@ -1,5 +1,5 @@
 '''\
-CONFIG_ETCD: 
+CONFIG_ETCD:
     - etcd register configures;
 
 Configs:
@@ -15,7 +15,7 @@ CONFIG_ETCD = {
    'monitor_dir'               : '/tmp/warden/containers',
    'base_data_path'            : '/tmp/warden/containers',
    'snapshot_path'             : '/tmp/dea_ng/tmp/dea_ng/db/instances.json',
-   'etcd_address'        : 'http://127.0.0.1:4001',
-   'white_list' : [ 'tmp' ],
-   'etcd_cluster'          : 'test'
+   'etcd_address'              : 'http://127.0.0.1:4001',
+   'white_list'                :  [ 'tmp' ],
+   'etcd_cluster'              : 'test'
 }
