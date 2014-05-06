@@ -2,9 +2,8 @@
 # -*- coding: iso-8859-1 -*-
 import os,sys
 import threading
-
-from container_link import ContainerLink
-from container_register import ContainerRegister
+from bns.worker import Monitor4BNS
+from etcd.worker import Monitor4ETCD
 from pyinotify import WatchManager, Notifier, EventsCodes
 
 class Monitor(threading.Thread):
@@ -18,9 +17,9 @@ class Monitor(threading.Thread):
 
         self.wm = WatchManager()
         if config['task'] == 'register':
-            self.notifier = Notifier(self.wm, ContainerRegister(logger, config))
+            self.notifier = Notifier(self.wm, Monitor4ETCD(logger, config))
         else:
-            self.notifier = Notifier(self.wm, ContainerLink(logger, config))
+            self.notifier = Notifier(self.wm, Monitor4BNS(logger, config))
         self.mon_dir = config['monitor_dir']
         self.logger.info("Monitor starting...")
 
@@ -51,6 +50,6 @@ class Monitor(threading.Thread):
                 # stop monitoring
                 self.notifier.stop()
                 break
-            except Exception, err:
+            #except Exception, err:
                 # otherwise keep on watching
-                self.logger.error("Error occured with %s" %err)
+                #self.logger.error("Error occured with %s" %err)
