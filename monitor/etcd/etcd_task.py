@@ -200,8 +200,9 @@ class EtcdTask(object):
         query_key = '{}/{}'.format(AGENTS_DIR, addr)
         query_resp, _ = self._worker.check_existence(query_key,
             recursive='true')
-        if not query_resp:
+        if not (query_resp and query_resp.key and 'nodes' in query_resp.key):
             return None
+
         handles = [hdl['key'].split('/')[3] for hdl in query_resp[1]['nodes']]
 
         return handles
@@ -346,7 +347,7 @@ class EtcdTask(object):
         handles_in_server = self.query_handles_by_ip(local_ip())
         if not handles_in_server:
             return
-
+ 
         for hdl in handles_in_server:
             if hdl not in self._base_dataset:
                 app_id = self.query_by_handle(hdl, 'app_id')
