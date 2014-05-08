@@ -16,30 +16,35 @@ class Monitor(threading.Thread):
                     EventsCodes.IN_CREATE | EventsCodes.IN_MOVED_TO
 
         self.wm = WatchManager()
+        self.mon_dir = []
         if config['task'] == 'register':
             self.notifier = Notifier(self.wm, Monitor4ETCD(logger, config))
+            self.mon_dir.append(config['monitor_dir'])
+            self.mon_dir.append(config['backup_dir'])
         else:
             self.notifier = Notifier(self.wm, Monitor4BNS(logger, config))
-        self.mon_dir = config['monitor_dir']
+            self.mon_dir.append(config['monitor_dir'])
         self.logger.info("Monitor starting...")
 
-    def check_monitor_dir(self, dir):
-        if not os.path.isdir(dir):
+    def check_monitor_dir(self, mdir):
+        if not os.path.isdir(mdir):
             self.logger.error("Config error, monitor dir not exist!")
             sys.exit(1)
-        
+
     def run(self):
 
         added_flag = False
-        self.check_monitor_dir(self.mon_dir)
-        self.logger.info("Monitor works with  %s" %self.mon_dir)
+        for mdir in self.mon_dir:
+            self.check_monitor_dir(mdir)
+            self.logger.info("Monitor works with  %s" %mdir)
         # read and process events
         while True:
             try:
                 if not added_flag:
                     # on first iteration, add a watch on path:
-                    # watch path for events handled by mask  
-                    self.wm.add_watch(self.mon_dir, self.mask)
+                    # watch path for events handled by mask
+                    for mdir in self.mon_dir:
+                        self.wm.add_watch(mdir, self.mask)
                     added_flag = True
                 self.notifier.process_events()
                 if self.notifier.check_events():

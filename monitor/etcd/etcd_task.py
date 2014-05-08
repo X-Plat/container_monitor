@@ -7,7 +7,7 @@ from monitor.etcd.etcd_protocol import *
 from monitor.etcd.etcd_register import EtcdRegister
 from monitor.etcd.dea_data import DeaData
 from monitor.common.common import local_ip
-import traceback 
+import traceback
 
 Logger = None
 
@@ -36,7 +36,7 @@ class EtcdTask(object):
 
     def __init__(self, logger, config, task_name=TASK_NAME):
         """
-        Analyze the difference between [self._snapshot_path] and 
+        Analyze the difference between [self._snapshot_path] and
         [self._base_data_path] to refresh real time information of con-
         tainers in centralized server.
         """
@@ -48,6 +48,7 @@ class EtcdTask(object):
             self._worker = EtcdRegister(config['etcd_address'])
             self._snapshot_path = config['snapshot_path']
             self._base_data_path = config['base_data_path']
+            self._backup_dir = config['backup_dir']
             self._white_list = config['white_list']
 
             self._input = None
@@ -60,7 +61,7 @@ class EtcdTask(object):
 
         except BaseException, err:
             err = sys.exc_info()
-            for filename, lineno, func, text in traceback.extract_tb(err[2]): 
+            for filename, lineno, func, text in traceback.extract_tb(err[2]):
                 Logger.error("%s line %s in %s "%(filename, lineno, func))
                 Logger.error("=> %s "%(repr(text)))
 
@@ -73,7 +74,7 @@ class EtcdTask(object):
         self._snapshot_data_by_id = self.snapshot_data_by_id()
         self._snapshot_data_by_warden = self.snapshot_data_by_warden()
         self._snapshot_dataset_by_warden = self.snapshot_dataset_by_warden()
-        self._snapshot_dataset_by_id = self.snapshot_dataset_by_id()        
+        self._snapshot_dataset_by_id = self.snapshot_dataset_by_id()
 
     def base_dataset(self):
         """ The base dataset """
@@ -82,11 +83,15 @@ class EtcdTask(object):
         if not os.path.exists(self._base_data_path):
             Logger.error("Base data path %s not exists!"%self._base_data_path)
             return set([])
-        data_list = os.listdir(self._base_data_path) 
+        backup = []
+        if os.path.exists(self._backup_dir):
+            backup = os.listdir(self._backup_dir)
+        data_list = os.listdir(self._base_data_path)
+        data_list.extend(backup)
         #Remove the unuseful directory no responding to containers from dataset
         data_list = [dirn for dirn in data_list if dirn not in self._white_list]
         return set(data_list)
-    
+
     def snapshot_data_by_id(self):
         'return the snapshot data by instance id'
         return self._input.index_by_kwd('instance_id')
@@ -126,7 +131,7 @@ class EtcdTask(object):
                 prefix = '/' + CONTAINERS_REQ_MAPS[para]
             else:
                 prefix = '/' + para
-             
+
             val = container[para_key]
 
             #update application directory on etcd.
@@ -137,11 +142,11 @@ class EtcdTask(object):
         #update agent directory on etcd.
         agent_key = AGENTS_DIR + '/' + container['ip'] + '/' + handle
         self._worker.set_key(agent_key, handle)
- 
+
     def query_by_handle(self, handle, key):
         """
         Query container data from containers directory;;
-        
+
         Params
         =====
         handle:  container handle managed by warden_handle
@@ -153,15 +158,15 @@ class EtcdTask(object):
         """
         query_key = '{}/{}/{}'.format(CONTAINERS_DIR, handle, key)
         query_resp, _ = self._worker.check_existence(query_key)
-        
-        if not query_resp: 
+
+        if not query_resp:
             return None
         return query_resp.key.get('value')
-        
+
     def query_by_app(self, app_id, handle, key):
         """
         Query container data from application directory;
-        
+
         Params
         =====
         app_id:   application id;
@@ -172,18 +177,18 @@ class EtcdTask(object):
         =====
         The value of this handle in this directory
         """
-      
+
         query_key = '{}/{}/{}/{}'.format(APPS_DIR, str(app_id), handle, key)
         query_resp, _ = self._worker.check_existence(query_key)
 
-        if not query_resp: 
+        if not query_resp:
             return None
         return query_resp.key.get('value')
 
     def query_handles_by_ip(self, addr):
         """
         Query  all containers on the specified agent from agents directory;
-        
+
         Params
         =====
         addr:  the agent ip;
@@ -193,9 +198,9 @@ class EtcdTask(object):
         The handle list on this agent;
         """
         query_key = '{}/{}'.format(AGENTS_DIR, addr)
-        query_resp, _ = self._worker.check_existence(query_key, 
+        query_resp, _ = self._worker.check_existence(query_key,
             recursive='true')
-        if not query_resp: 
+        if not query_resp:
             return None
         handles = [hdl['key'].split('/')[3] for hdl in query_resp[1]['nodes']]
 
@@ -204,7 +209,7 @@ class EtcdTask(object):
     def delete_by_app(self, app_id, handle):
         """
         Delete container data from  applications directory;
-        
+
         Params
         =====
         app_id:   application id;
@@ -217,11 +222,11 @@ class EtcdTask(object):
         """
         query_key = '{}/{}/{}'.format(APPS_DIR, str(app_id), handle)
         self._worker.delete_key(query_key)
-        
+
     def delete_by_handle(self, handle):
         """
         Delete container data from containers directory;
-        
+
         Params
         =====
         handle:  container handle managed by warden_handle
@@ -250,26 +255,26 @@ class EtcdTask(object):
         """
 
         query_key = '{}/{}/{}'.format(AGENTS_DIR, agent, handle)
-        self._worker.delete_key(query_key) 
+        self._worker.delete_key(query_key)
 
     @timecost
     def update_missing(self):
         """
         Update the containers that not recorded on the snapshot file.
-        NOTE:  
-        1. If container info could be found in snapshot file, update the 
+        NOTE:
+        1. If container info could be found in snapshot file, update the
             etcd data by snapshot data;
         2. If container info not in the snapshot file, just update the sta
-            tus(generally, it means the container are STOPPED or CRASHED); 
+            tus(generally, it means the container are STOPPED or CRASHED);
         """
 
         missing = self._base_dataset - self._snapshot_dataset_by_warden
-        if len(missing): 
+        if len(missing):
             Logger.debug("Found missing containers, writing to etcd.")
         for handle in missing:
             instance_id = self.query_by_handle(handle, 'instance_id')
             app_id = self.query_by_handle(handle, 'app_id')
-            if (not instance_id) or (not app_id): 
+            if (not instance_id) or (not app_id):
                 continue
 
             instance_info = self._snapshot_data_by_id.get(instance_id)
@@ -286,7 +291,7 @@ class EtcdTask(object):
                         APPS_DIR, str(app_id), handle, 'state')
                     current_state_in_cons = '{}/{}/{}'.format(
                         CONTAINERS_DIR, handle, 'state')
-                                                
+
                     self._worker.set_key(current_state_in_apps, 'STOPPED')
                     self._worker.set_key(current_state_in_cons, 'STOPPED')
 
@@ -297,25 +302,25 @@ class EtcdTask(object):
         """
         extra = self._snapshot_dataset_by_warden - self._base_dataset
 
-        if len(extra) > 0: 
+        if len(extra) > 0:
             Logger.debug('Found stale containers in dea.')
 
         for handle in extra:
             data_ins = self._snapshot_data_by_warden.get(handle)
-            if not data_ins: 
+            if not data_ins:
                 continue
             #update application directory of etcd.
-            app_dir_key = '{}/{}/{}'.format(APPS_DIR, 
+            app_dir_key = '{}/{}/{}'.format(APPS_DIR,
                 data_ins['app_id'], handle)
 
             self._worker.check_and_delete(app_dir_key)
 
-            #update the containers directory  of etcd.   
+            #update the containers directory  of etcd.
             con_dir_key = '{}/{}'.format(CONTAINERS_DIR, handle)
             self._worker.check_and_delete(con_dir_key)
-  
-            #update agent directory of etcd.   
-            agent_key = '{}/{}/{}'.format(AGENTS_DIR, 
+
+            #update agent directory of etcd.
+            agent_key = '{}/{}/{}'.format(AGENTS_DIR,
                 data_ins['ip'], handle)
             self._worker.check_and_delete(agent_key)
 
@@ -328,25 +333,25 @@ class EtcdTask(object):
         for handle in active:
             instance_info = self._snapshot_data_by_warden.get(handle)
             app_id = instance_info['app_id']
-            if not app_id: 
+            if not app_id:
                 continue
-      
+
             self.register_container_to_app(app_id, handle, instance_info)
 
-    @timecost   
+    @timecost
     def sync_with_server(self):
         """
         Compare local data with etcd server, to erease expired records.
         """
         handles_in_server = self.query_handles_by_ip(local_ip())
-        if not handles_in_server: 
+        if not handles_in_server:
             return
 
         for hdl in handles_in_server:
             if hdl not in self._base_dataset:
                 app_id = self.query_by_handle(hdl, 'app_id')
                 self.delete_by_handle(hdl)
-                self.delete_by_app(app_id, hdl)        
+                self.delete_by_app(app_id, hdl)
                 self.delete_by_agent(hdl, local_ip())
 
     def start(self):
