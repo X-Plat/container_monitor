@@ -50,6 +50,7 @@ class EtcdTask(object):
             self._base_data_path = config['base_data_path']
             self._backup_dir = config['backup_dir']
             self._white_list = config['white_list']
+            self._cluster = config['etcd_cluster']
 
             self._input = None
             self._base_dataset = None
@@ -69,7 +70,7 @@ class EtcdTask(object):
     def _refresh_dataset(self):
         """ Refresh the dataset of an etcd_task object."""
 
-        self._input = DeaData(self._snapshot_path)
+        self._input = DeaData(self._snapshot_path, self._cluster)
         self._base_dataset = self.base_dataset()
         self._snapshot_data_by_id = self.snapshot_data_by_id()
         self._snapshot_data_by_warden = self.snapshot_data_by_warden()

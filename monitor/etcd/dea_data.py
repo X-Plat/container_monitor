@@ -15,8 +15,9 @@ class DeaData(object):
         'warden_handle'
     ]
 
-    def __init__(self, snapshot_path):
+    def __init__(self, snapshot_path, cluster='dev'):
         self._snapshot = ensure_read_yaml(snapshot_path)       
+        self._cluster = cluster
 
     @property
     def instances(self):
@@ -33,7 +34,7 @@ class DeaData(object):
         if kwd not in self._index_kwd: 
             return data
 
-        data = {ins[kwd]: ContainerData(ins).metadata().copy() 
+        data = {ins[kwd]: ContainerData(ins, self._cluster).metadata().copy() 
                      for ins in self.instances if kwd in ins}
         return data 
           
