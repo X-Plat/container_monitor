@@ -102,8 +102,8 @@ class EtcdTask(object):
         return self._input.index_by_kwd('instance_id')
 
     def snapshot_data_by_warden(self):
-        'return the snapshot data by warden_handle'
-        return self._input.index_by_kwd('warden_handle')
+        'return the snapshot data by warden_container_path'
+        return self._input.index_by_kwd('warden_container_path')
 
     def snapshot_dataset_by_id(self):
         'return the snapshot keys by instance ids'

@@ -12,7 +12,7 @@ class DeaData(object):
     """
     _index_kwd = [
         'instance_id',
-        'warden_handle'
+        'warden_container_path'
     ]
 
     def __init__(self, snapshot_path, cluster='dev'):
@@ -34,7 +34,7 @@ class DeaData(object):
         if kwd not in self._index_kwd: 
             return data
 
-        data = {ins[kwd]: ContainerData(ins, self._cluster).metadata().copy() 
+        data = {ins[kwd].split('/')[-1]: ContainerData(ins, self._cluster).metadata().copy() 
                      for ins in self.instances if kwd in ins}
         return data 
           
