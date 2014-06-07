@@ -44,8 +44,8 @@ class Monitor4BNS(ProcessEvent):
         self.logger.debug('Monitor4BNS::process_IN_MOVED_TO')
         super(Monitor4BNS, self).process_default(event)
 
-        register_dir = self.container_base_path + '/' + 'register'
-        self.notify_etcd_register(register_dir)
+        #register_dir = self.container_base_path + '/' + 'register'
+        #self.notify_etcd_register(register_dir)
         snapshot = ensure_read_yaml(self.ins_file)
         self.update_bns_link(snapshot)
 
@@ -105,6 +105,8 @@ class Monitor4BNS(ProcessEvent):
                     if not os.path.islink(bns_path):
                         self.logger.info('Create symlink for {}-{}.'.format(
                             ins['application_name'], ins['instance_index']))
+                        register_dir = self.container_base_path + '/' + ins['warden_handle'] + '-fresh'
+                        self.notify_etcd_register(register_dir)
                         os.symlink(container_path, bns_path)
                     elif not os.access(bns_path, os.W_OK):
                         self.logger.warn('Remove staled link {}'.format(
