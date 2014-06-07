@@ -367,10 +367,7 @@ class EtcdTask(object):
 
         for handle in extra:
             self.logger.debug("{} not exist any more, delete it".format(handle))
-            app_id = self.query_by_handle(handle, 'app_id')
-            self.delete_by_handle(handle)
-            self.delete_by_app(app_id, handle)
-            self.delete_by_agent(handle, local_ip())
+            self.unregister_containers_from_etcd(handle)
 
     def start(self, notified_dir, event):
         'start task'
