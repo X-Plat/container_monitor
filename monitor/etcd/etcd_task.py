@@ -296,24 +296,53 @@ class EtcdTask(object):
                     return
                 self.delete_by_handle(handle)
                 self.delete_by_app(app_id, handle)
-                self.delete_by_agent(handle, local_ip())   
+                self.delete_by_agent(handle, local_ip())
                 self.logger.debug("delete staled container {} from etcd".format(handle))
         else:
+            if handle not in self._base_dataset:
+                self.unregister_containers_from_etcd(handle)
+                return
             instance_id = self.query_by_handle(handle, 'instance_id')
             app_id = self.query_by_handle(handle, 'app_id')
             if (not instance_id) or (not app_id):
                 self.logger.debug("Container not in ETCD, assuming {} TEST or STALED.".format(handle))
             else:
-                #update container state, if it couldn't be found in snapshot.
-                etcd_state = self.query_by_app(app_id, handle, 'state')
-                if etcd_state != 'CRASHED':
-                    current_state_in_apps = '{}/{}/{}/{}'.format(
-                        APPS_DIR, str(app_id), handle, 'state')
-                    current_state_in_cons = '{}/{}/{}'.format(
-                        CONTAINERS_DIR, handle, 'state')
-                    self.logger.debug("update inactive handle {} to etcd".format(handle))
-                    self._worker.set_key(current_state_in_apps, 'STOPPED')
-                    self._worker.set_key(current_state_in_cons, 'STOPPED')
+                self.update_container_state(handle)
+
+    def unregister_containers_from_etcd(self, handle):
+        """
+        unregister container info from etcd
+        """
+        app_id = self.query_by_handle(handle, 'app_id')
+        if not app_id:
+            self.logger.debug("app_id of {} not found on  etcd, assuming test event.".format(handle))
+            return
+        self.delete_by_handle(handle)
+        self.delete_by_app(app_id, handle)
+        self.delete_by_agent(handle, local_ip())
+        self.logger.debug("unregister staled container {} from etcd".format(handle))
+
+    def update_container_state(self, handle):
+        """
+        update container state to etcd server
+        """
+        instance_info = self._snapshot_data_by_warden.get(handle)
+        if not instance_info:
+           return
+        local_state = instance_info['state']
+        app_id = instance_info['app_id']
+        etcd_state = self.query_by_app(app_id, handle, 'state')
+        if not etcd_state:
+            self.register_container_to_app(app_id, handle, instance_info)
+            self.logger.debug("register container {} to etcd".format(handle))
+        elif etcd_state != local_state:
+            current_state_in_apps = '{}/{}/{}/{}'.format(
+                APPS_DIR, str(app_id), handle, 'state')
+            current_state_in_cons = '{}/{}/{}'.format(
+                CONTAINERS_DIR, handle, 'state')
+            self._worker.set_key(current_state_in_apps, local_state)
+            self._worker.set_key(current_state_in_cons, local_state)
+            self.logger.debug("update inactive handle {} to etcd".format(handle))
 
     @timecost
     def sync_with_server(self):
@@ -328,23 +357,7 @@ class EtcdTask(object):
         extra = handles_in_server - handles_in_local
 
         for handle in handles_in_local:
-            instance_info = self._snapshot_data_by_warden.get(handle)
-            local_state = instance_info['state']
-            app_id = instance_info['app_id']
-            etcd_state = self.query_by_app(app_id, handle, 'state')
-            if not etcd_state:
-                self.register_container_to_app(app_id, handle, instance_info)
-                self.logger.debug("register container {} to etcd".format(handle))
-            elif etcd_state != local_state:
-                current_state_in_apps = '{}/{}/{}/{}'.format(
-                    APPS_DIR, str(app_id), handle, 'state')
-                current_state_in_cons = '{}/{}/{}'.format(
-                    CONTAINERS_DIR, handle, 'state')
-                self._worker.set_key(current_state_in_apps, local_state)
-                self._worker.set_key(current_state_in_cons, local_state)
-                self.logger.debug("update inactive handle {} to etcd".format(handle))
-            else:
-                pass
+            self.update_container_state(handle)
 
         for handle in missing:
             instance_info = self._snapshot_data_by_warden.get(handle)
