@@ -5,3 +5,10 @@
       - rewrite the main program structure;
       - allow monitoring 2 directories to support containers backup of warden;
       - update the sync logic with etcd server;
+  - 2.0.2:
+    release: 2014-06-09
+    description：
+      - speed up the monitor speed;
+      - add sync timer for sync with etcd;
+      - only update the changed container;
+
