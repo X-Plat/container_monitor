@@ -278,36 +278,29 @@ class EtcdTask(object):
         self._worker.delete_key(query_key)
 
     @timecost
+    def refresh_inactive_containers(self):
+        """
+        refresh CRASHED/STOPPED containers to etcd
+        """
+        for handle in self._snapshot_dataset_by_warden:
+            if handle in self._base_dataset:
+                instance_info = self._snapshot_data_by_warden.get(handle)
+                state = instance_info['state']
+                if state != 'RUNNING':
+                    self.update_container_state(handle)
+
+    @timecost
     def update_container(self, handle):
         """
         Update active containers information to etcd.
         """
         #check in snapshot
-        if handle in self._snapshot_dataset_by_warden:
-            if handle in self._base_dataset:
-                instance_info = self._snapshot_data_by_warden.get(handle)
-                app_id = instance_info['app_id']
-                self.register_container_to_app(app_id, handle, instance_info)
-                self.logger.debug("register container {} to etcd".format(handle))
-            else:
-                app_id = self.query_by_handle(handle, 'app_id')
-                if not app_id:
-                    self.logger.debug("app_id of {} not found on  etcd, assuming test event.".format(handle))
-                    return
-                self.delete_by_handle(handle)
-                self.delete_by_app(app_id, handle)
-                self.delete_by_agent(handle, local_ip())
-                self.logger.debug("delete staled container {} from etcd".format(handle))
-        else:
-            if handle not in self._base_dataset:
-                self.unregister_containers_from_etcd(handle)
-                return
-            instance_id = self.query_by_handle(handle, 'instance_id')
-            app_id = self.query_by_handle(handle, 'app_id')
-            if (not instance_id) or (not app_id):
-                self.logger.debug("Container not in ETCD, assuming {} TEST or STALED.".format(handle))
-            else:
-                self.update_container_state(handle)
+        if handle not in self._base_dataset:
+            self.logger.debug("{} not in dataset, unregister it.".format(handle))
+            self.unregister_containers_from_etcd(handle)
+            return
+
+        self.update_container_state(handle)
 
     def unregister_containers_from_etcd(self, handle):
         """
@@ -327,22 +320,33 @@ class EtcdTask(object):
         update container state to etcd server
         """
         instance_info = self._snapshot_data_by_warden.get(handle)
-        if not instance_info:
-           return
-        local_state = instance_info['state']
-        app_id = instance_info['app_id']
+        if instance_info:
+            local_state = instance_info['state']
+            app_id = instance_info['app_id']
+        else:
+            #local_state = 'STOPPED'
+            app_id = self.query_by_handle(handle, 'app_id')
+            if not app_id:
+                self.logger.debug("ignore {}, since app_id not recorded in etcd.".format(handle))
+                return 
         etcd_state = self.query_by_app(app_id, handle, 'state')
         if not etcd_state:
+            if not instance_info:
+                self.logger.debug('ignore container {} not recorded in snapshot and etcd'.format(handle))
+                return
             self.register_container_to_app(app_id, handle, instance_info)
             self.logger.debug("register container {} to etcd".format(handle))
-        elif etcd_state != local_state:
+        elif etcd_state != 'CRASHED':
+            local_state = 'STOPPED'
             current_state_in_apps = '{}/{}/{}/{}'.format(
                 APPS_DIR, str(app_id), handle, 'state')
             current_state_in_cons = '{}/{}/{}'.format(
                 CONTAINERS_DIR, handle, 'state')
             self._worker.set_key(current_state_in_apps, local_state)
             self._worker.set_key(current_state_in_cons, local_state)
-            self.logger.debug("update inactive handle {} to etcd".format(handle))
+            self.logger.debug("update state of inactive handle {} to etcd to STOPPED".format(handle))
+        else:
+            pass
 
     @timecost
     def sync_with_server(self):
@@ -352,11 +356,14 @@ class EtcdTask(object):
         self.logger.debug("sync with server.")
         local = local_ip()
         handles_in_server = self.query_handles_by_ip(local)
-        handles_in_local = self._base_dataset & self._snapshot_dataset_by_warden
-        missing = handles_in_local -  handles_in_server
-        extra = handles_in_server - handles_in_local
+        handles_in_local = self._base_dataset
+        server_missing = self._base_dataset - handles_in_server
 
-        for handle in handles_in_local:
+        missing = server_missing & self._snapshot_dataset_by_warden
+        staled = server_missing - self._snapshot_dataset_by_warden
+        extra = handles_in_server - self._base_dataset
+
+        for handle in staled:
             self.update_container_state(handle)
 
         for handle in missing:
@@ -371,20 +378,30 @@ class EtcdTask(object):
 
     def start(self, notified_dir, event):
         'start task'
-        self._refresh_dataset()
-        notify_rule = re.compile(r'([a-z,1-9]+)-fresh')
+        notify_rule = re.compile(r'([a-z,0-9]+)-fresh')
         notify_check = notify_rule.findall(notified_dir)
+       
         if len(notify_check) > 0:
-            if event != 'delete':
+            if event == 'create':
+                self._refresh_dataset()
                 self.update_container(notify_check[0])
-                self.logger.debug("register fresh container {} to etcd".format(notify_check[0]))
+                self.logger.debug("refresh container {} to etcd".format(notify_check[0]))
             else:
-                self.logger.debug("ignore snapshot clean event.")
+                self.logger.debug("ignore snapshot running clean event.")
+        elif notified_dir == 'snapshot-changed':
+            if event == 'create':
+                self._refresh_dataset()
+                self.refresh_inactive_containers()
+                self.logger.debug("refresh inactive containers.")
+            else:
+                self.logger.debug("ignore snapshot change clean event.")
         elif notified_dir == 'cm-test':
-            if event != 'delete':
+            if event == 'create':
+                self._refresh_dataset()
                 self.sync_with_server()
             else:
                 self.logger.debug("ignore cm-test clean event.")
         else:
+            self._refresh_dataset()
             self.update_container(notified_dir)
 

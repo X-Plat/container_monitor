@@ -8,6 +8,7 @@ Class: Monitor4BNS
        updates the symlink for containers;
 '''
 import yaml, os.path
+import time
 from pyinotify import ProcessEvent
 from monitor.common.common import ensure_read_yaml
 
@@ -67,8 +68,10 @@ class Monitor4BNS(ProcessEvent):
         if not test_dir:
             return False
         try:
-            if not os.path.exists(test_dir):
-                os.makedirs(test_dir)
+            if os.path.exists(test_dir):
+                os.rmdir(test_dir)
+            os.makedirs(test_dir)
+            time.sleep(0.5)
             os.rmdir(test_dir)
         except IOError, err:
             self.logger.warn("Notify etcd task failed with {}".format(err))
@@ -112,6 +115,8 @@ class Monitor4BNS(ProcessEvent):
                         os.remove(bns_path)
                         self.logger.info('Recreate symlink for {}-{}.'.format(
                             ins['application_name'], ins['instance_index']))
+                        register_dir = self.container_base_path + '/' + ins['warden_handle'] + '-fresh'
+                        self.notify_etcd_register(register_dir)
                         os.symlink(container_path, bns_path)
                     else:
                         self.logger.warn('link for {}-{} exist, skip!'.format(
@@ -124,3 +129,5 @@ class Monitor4BNS(ProcessEvent):
             for extra in extra_links:
                 self.logger.warn('Deleting extra link for %s' %(extra))
                 os.remove(extra)
+        register_dir = self.container_base_path + '/' + 'snapshot-changed'
+        self.notify_etcd_register(register_dir)
