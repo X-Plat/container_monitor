@@ -4,6 +4,7 @@ import os,sys
 import threading
 from bns.worker import Monitor4BNS
 from etcd.worker import Monitor4ETCD
+from etcd.sync_timer import SyncTimer
 from pyinotify import WatchManager, Notifier, EventsCodes
 
 class Monitor(threading.Thread):
@@ -21,28 +22,24 @@ class Monitor(threading.Thread):
             self.notifier = Notifier(self.wm, Monitor4ETCD(logger, config))
             self.mon_dir.append(config['monitor_dir'])
             self.mon_dir.append(config['backup_dir'])
+            test_dir = config['monitor_dir'] + '/' + 'cm-test'
+            self.sync_timer = SyncTimer(self.logger, test_dir, 300)
+            self.sync_timer.start()
         else:
             self.notifier = Notifier(self.wm, Monitor4BNS(logger, config))
             self.mon_dir.append(config['monitor_dir'])
         self.logger.info("Monitor starting...")
 
-    def check_monitor_dir(self, mdir):
-        if not os.path.isdir(mdir):
-            self.logger.error("Config error, monitor dir not exist!")
-            sys.exit(1)
-
     def run(self):
-
         added_flag = False
         for mdir in self.mon_dir:
-            self.check_monitor_dir(mdir)
+            if not os.path.isdir(mdir):
+                self.logger.warn("Monitor dir not exist, create it.")
+                os.makedirs(mdir)
             self.logger.info("Monitor works with  %s" %mdir)
-        # read and process events
         while True:
             try:
                 if not added_flag:
-                    # on first iteration, add a watch on path:
-                    # watch path for events handled by mask
                     for mdir in self.mon_dir:
                         self.wm.add_watch(mdir, self.mask)
                     added_flag = True
@@ -50,10 +47,9 @@ class Monitor(threading.Thread):
                 if self.notifier.check_events():
                     self.notifier.read_events()
             except KeyboardInterrupt:
-                # ...until c^c signal
                 self.logger.info('stop monitoring...')
-                # stop monitoring
                 self.notifier.stop()
+                self.sync_timer.cancel()
                 break
             #except Exception, err:
                 # otherwise keep on watching

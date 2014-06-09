@@ -1,5 +1,6 @@
 # -*- coding: iso-8859-1 -*-
 import time
+import re
 import os, sys
 from itertools import count
 from functools import wraps
@@ -217,11 +218,11 @@ class EtcdTask(object):
             recursive='true')
         if not (query_resp and query_resp.key and 'nodes' in query_resp.key):
             self.logger.debug("no handle in {}".format(query_key))
-            return None
+            return set([])
 
         handles = [hdl['key'].split('/')[3] for hdl in query_resp[1]['nodes']]
         self.logger.debug("get all handles in {}".format(query_key))
-        return handles
+        return set(handles)
 
     def delete_by_app(self, app_id, handle):
         """
@@ -277,113 +278,130 @@ class EtcdTask(object):
         self._worker.delete_key(query_key)
 
     @timecost
-    def update_missing(self):
+    def refresh_inactive_containers(self):
         """
-        Update the containers that not recorded on the snapshot file.
-        NOTE:
-        1. If container info could be found in snapshot file, update the
-            etcd data by snapshot data;
-        2. If container info not in the snapshot file, just update the sta
-            tus(generally, it means the container are STOPPED or CRASHED);
+        refresh CRASHED/STOPPED containers to etcd
         """
-
-        missing = self._base_dataset - self._snapshot_dataset_by_warden
-        if len(missing):
-            Logger.debug("Found missing containers, writing to etcd.")
-        for handle in missing:
-            instance_id = self.query_by_handle(handle, 'instance_id')
-            app_id = self.query_by_handle(handle, 'app_id')
-            if (not instance_id) or (not app_id):
-                self.logger.debug("get app_id or ins_id of {} from etcd failed.".format(handle))
-                continue
-
-            instance_info = self._snapshot_data_by_id.get(instance_id)
-
-            if instance_info:
-                #update container data to etcd, if the container is recorded .
-                self.logger.debug("found {}({}) in snapshot, update to etcd.".format(instance_id, handle))
-                self.register_container_to_app(app_id, handle, instance_info)
-            else:
-                #update container state, if it couldn't be found in snapshot.
-                prev_state = self.query_by_app(app_id, handle, 'state')
-
-                if prev_state != 'CRASHED':
-                    current_state_in_apps = '{}/{}/{}/{}'.format(
-                        APPS_DIR, str(app_id), handle, 'state')
-                    current_state_in_cons = '{}/{}/{}'.format(
-                        CONTAINERS_DIR, handle, 'state')
-                    self.logger.debug("update inactive handle {} to etcd".format(handle))
-                    self._worker.set_key(current_state_in_apps, 'STOPPED')
-                    self._worker.set_key(current_state_in_cons, 'STOPPED')
+        for handle in self._snapshot_dataset_by_warden:
+            if handle in self._base_dataset:
+                instance_info = self._snapshot_data_by_warden.get(handle)
+                state = instance_info['state']
+                if state != 'RUNNING':
+                    self.update_container_state(handle)
 
     @timecost
-    def erease_extra(self):
-        """
-        Delete extra container information, since they were cleared by warden.
-        """
-        extra = self._snapshot_dataset_by_warden - self._base_dataset
-
-        if len(extra) > 0:
-            Logger.debug('Found stale containers in dea.')
-
-        for handle in extra:
-            data_ins = self._snapshot_data_by_warden.get(handle)
-            if not data_ins:
-                self.logger.debug("{} not in snapshot".format(handle))
-                continue
-            #update application directory of etcd.
-            app_dir_key = '{}/{}/{}'.format(APPS_DIR,
-                data_ins['app_id'], handle)
-
-            self._worker.check_and_delete(app_dir_key)
-
-            #update the containers directory  of etcd.
-            con_dir_key = '{}/{}'.format(CONTAINERS_DIR, handle)
-            self._worker.check_and_delete(con_dir_key)
-
-            #update agent directory of etcd.
-            agent_key = '{}/{}/{}'.format(AGENTS_DIR,
-                data_ins['ip'], handle)
-            self._worker.check_and_delete(agent_key)
-
-    @timecost
-    def update_active(self):
+    def update_container(self, handle):
         """
         Update active containers information to etcd.
         """
-        active = self._base_dataset & self._snapshot_dataset_by_warden
-        for handle in active:
-            instance_info = self._snapshot_data_by_warden.get(handle)
+        #check in snapshot
+        if handle not in self._base_dataset:
+            self.logger.debug("{} not in dataset, unregister it.".format(handle))
+            self.unregister_containers_from_etcd(handle)
+            return
+
+        self.update_container_state(handle)
+
+    def unregister_containers_from_etcd(self, handle):
+        """
+        unregister container info from etcd
+        """
+        app_id = self.query_by_handle(handle, 'app_id')
+        if not app_id:
+            self.logger.debug("app_id of {} not found on  etcd, assuming test event.".format(handle))
+            return
+        self.delete_by_handle(handle)
+        self.delete_by_app(app_id, handle)
+        self.delete_by_agent(handle, local_ip())
+        self.logger.debug("unregister staled container {} from etcd".format(handle))
+
+    def update_container_state(self, handle):
+        """
+        update container state to etcd server
+        """
+        instance_info = self._snapshot_data_by_warden.get(handle)
+        if instance_info:
+            local_state = instance_info['state']
             app_id = instance_info['app_id']
+        else:
+            #local_state = 'STOPPED'
+            app_id = self.query_by_handle(handle, 'app_id')
             if not app_id:
-                self.logger.debug("no app_id for active container {}".format(handle))
-                continue
-            self.logger.debug("register container {} info to etcd".format(handle))
+                self.logger.debug("ignore {}, since app_id not recorded in etcd.".format(handle))
+                return 
+        etcd_state = self.query_by_app(app_id, handle, 'state')
+        if not etcd_state:
+            if not instance_info:
+                self.logger.debug('ignore container {} not recorded in snapshot and etcd'.format(handle))
+                return
             self.register_container_to_app(app_id, handle, instance_info)
+            self.logger.debug("register container {} to etcd".format(handle))
+        elif etcd_state != 'CRASHED':
+            local_state = 'STOPPED'
+            current_state_in_apps = '{}/{}/{}/{}'.format(
+                APPS_DIR, str(app_id), handle, 'state')
+            current_state_in_cons = '{}/{}/{}'.format(
+                CONTAINERS_DIR, handle, 'state')
+            self._worker.set_key(current_state_in_apps, local_state)
+            self._worker.set_key(current_state_in_cons, local_state)
+            self.logger.debug("update state of inactive handle {} to etcd to STOPPED".format(handle))
+        else:
+            pass
 
     @timecost
     def sync_with_server(self):
         """
         Compare local data with etcd server, to erease expired records.
         """
+        self.logger.debug("sync with server.")
         local = local_ip()
         handles_in_server = self.query_handles_by_ip(local)
-        if not handles_in_server:
-            self.logger.debug("no containers found on {}".format(local))
-            return
+        handles_in_local = self._base_dataset
+        server_missing = self._base_dataset - handles_in_server
 
-        for hdl in handles_in_server:
-            if hdl not in self._base_dataset:
-                self.logger.debug("{} not exist any more, delete it".format(hdl))
-                app_id = self.query_by_handle(hdl, 'app_id')
-                self.delete_by_handle(hdl)
-                self.delete_by_app(app_id, hdl)
-                self.delete_by_agent(hdl, local_ip())
+        missing = server_missing & self._snapshot_dataset_by_warden
+        staled = server_missing - self._snapshot_dataset_by_warden
+        extra = handles_in_server - self._base_dataset
 
-    def start(self):
+        for handle in staled:
+            self.update_container_state(handle)
+
+        for handle in missing:
+            instance_info = self._snapshot_data_by_warden.get(handle)
+            app_id = instance_info['app_id']
+            self.register_container_to_app(app_id, handle, instance_info)
+            self.logger.debug("register container {} info to etcd".format(handle))
+
+        for handle in extra:
+            self.logger.debug("{} not exist any more, delete it".format(handle))
+            self.unregister_containers_from_etcd(handle)
+
+    def start(self, notified_dir, event):
         'start task'
-        self._refresh_dataset()
-        self.erease_extra()
-        self.update_missing()
-        self.update_active()
-        self.sync_with_server()
+        notify_rule = re.compile(r'([a-z,0-9]+)-fresh')
+        notify_check = notify_rule.findall(notified_dir)
+       
+        if len(notify_check) > 0:
+            if event == 'create':
+                self._refresh_dataset()
+                self.update_container(notify_check[0])
+                self.logger.debug("refresh container {} to etcd".format(notify_check[0]))
+            else:
+                self.logger.debug("ignore snapshot running clean event.")
+        elif notified_dir == 'snapshot-changed':
+            if event == 'create':
+                self._refresh_dataset()
+                self.refresh_inactive_containers()
+                self.logger.debug("refresh inactive containers.")
+            else:
+                self.logger.debug("ignore snapshot change clean event.")
+        elif notified_dir == 'cm-test':
+            if event == 'create':
+                self._refresh_dataset()
+                self.sync_with_server()
+            else:
+                self.logger.debug("ignore cm-test clean event.")
+        else:
+            self._refresh_dataset()
+            self.update_container(notified_dir)
+

@@ -4,10 +4,11 @@ worker module for bns symlink;
 
 Class: Monitor4BNS
     - monitor for bns symlink management;
-    - it could monitor the fs events in specified dir, 
+    - it could monitor the fs events in specified dir,
        updates the symlink for containers;
 '''
 import yaml, os.path
+import time
 from pyinotify import ProcessEvent
 from monitor.common.common import ensure_read_yaml
 
@@ -44,8 +45,6 @@ class Monitor4BNS(ProcessEvent):
         self.logger.debug('Monitor4BNS::process_IN_MOVED_TO')
         super(Monitor4BNS, self).process_default(event)
 
-        register_dir = self.container_base_path + '/' + 'register'
-        self.notify_etcd_register(register_dir)
         snapshot = ensure_read_yaml(self.ins_file)
         self.update_bns_link(snapshot)
 
@@ -66,11 +65,13 @@ class Monitor4BNS(ProcessEvent):
         """
         mkdir test dir for register task
         """
-        if not test_dir: 
+        if not test_dir:
             return False
         try:
-            if not os.path.exists(test_dir):
-                os.makedirs(test_dir)
+            if os.path.exists(test_dir):
+                os.rmdir(test_dir)
+            os.makedirs(test_dir)
+            time.sleep(0.5)
             os.rmdir(test_dir)
         except IOError, err:
             self.logger.warn("Notify etcd task failed with {}".format(err))
@@ -79,7 +80,7 @@ class Monitor4BNS(ProcessEvent):
 
     def update_bns_link(self, agent_data):
         """
-        generate bns link for instances 
+        generate bns link for instances
         """
         #TODO(jacky): trap exceptions
         self.logger.info('Starting checking the links.')
@@ -105,6 +106,8 @@ class Monitor4BNS(ProcessEvent):
                     if not os.path.islink(bns_path):
                         self.logger.info('Create symlink for {}-{}.'.format(
                             ins['application_name'], ins['instance_index']))
+                        register_dir = self.container_base_path + '/' + ins['warden_handle'] + '-fresh'
+                        self.notify_etcd_register(register_dir)
                         os.symlink(container_path, bns_path)
                     elif not os.access(bns_path, os.W_OK):
                         self.logger.warn('Remove staled link {}'.format(
@@ -112,11 +115,13 @@ class Monitor4BNS(ProcessEvent):
                         os.remove(bns_path)
                         self.logger.info('Recreate symlink for {}-{}.'.format(
                             ins['application_name'], ins['instance_index']))
+                        register_dir = self.container_base_path + '/' + ins['warden_handle'] + '-fresh'
+                        self.notify_etcd_register(register_dir)
                         os.symlink(container_path, bns_path)
                     else:
                         self.logger.warn('link for {}-{} exist, skip!'.format(
                              ins['application_name'], ins['instance_index']))
- 
+
         extra_links = current_links - required_links
         self.logger.debug('Extra links %s' %extra_links)
 
@@ -124,3 +129,5 @@ class Monitor4BNS(ProcessEvent):
             for extra in extra_links:
                 self.logger.warn('Deleting extra link for %s' %(extra))
                 os.remove(extra)
+        register_dir = self.container_base_path + '/' + 'snapshot-changed'
+        self.notify_etcd_register(register_dir)
