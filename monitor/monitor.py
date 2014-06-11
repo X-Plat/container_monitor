@@ -23,7 +23,7 @@ class Monitor(threading.Thread):
             self.mon_dir.append(config['monitor_dir'])
             self.mon_dir.append(config['backup_dir'])
             test_dir = config['monitor_dir'] + '/' + 'cm-test'
-            self.sync_timer = SyncTimer(self.logger, test_dir, 300)
+            self.sync_timer = SyncTimer(self.logger, test_dir, 60)
             self.sync_timer.start()
         else:
             self.notifier = Notifier(self.wm, Monitor4BNS(logger, config))
