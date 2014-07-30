@@ -85,11 +85,8 @@ class CollectorTask(object):
             self._base_data_path = config['base_data_path']
             self._backup_dir = config['backup_dir']
             self._white_list = config['white_list']
-           
+
             self.collector_ip, self.collector_port = parse_server(config['collector'])
-            print config['collector']
-            print self.collector_ip
-            print self.collector_port
             self._input = None
             self._base_dataset = None
             self._snapshot_data_by_id = None
@@ -149,6 +146,7 @@ class CollectorTask(object):
         'return the snapshot keys by warden_handle'
         return set(self._snapshot_data_by_warden.keys())
 
+    @timecost
     def request_collector(self, action, **args):
         resp, error = None, None
         try:
@@ -157,8 +155,6 @@ class CollectorTask(object):
             url = 'http://{}:{}{}'.format(self.collector_ip, self.collector_port, api)
             method = REQUEST_METHOD[action]
             http_method = getattr(requests, method)
-            print "payload "
-            print json.dumps(args)
             raw_resp = http_method(url, data=json.dumps(args), headers=headers)
             resp = json.loads(raw_resp.text)
             if resp['rescode'] != 0:
@@ -187,10 +183,18 @@ class CollectorTask(object):
         #check in snapshot
         if handle not in self._base_dataset:
             self.logger.debug("{} not in dataset, unregister it.".format(handle))
-            #self.unregister_containers_from_collector(handle)
+            self.unregister_containers_from_collector(handle)
             return
 
         self.update_container_state(handle)
+
+    def unregister_containers_from_collector(self, handle):
+        """
+         Delete staled container
+        """
+        local_state = 'DELETED'
+        self.request_collector('state_update', ip=local_ip(), handle=handle, state=local_state)
+        self.logger.debug("container {} state change : {} -> {}".format(handle, 'N/A', local_state))
 
     def update_container_state(self, handle):
         """
@@ -198,9 +202,8 @@ class CollectorTask(object):
         """
         collector_info, error = self.request_collector('state_query', ip=local_ip(), handle=handle)
         self.logger.debug('query state of {}.'.format(handle))
-
         if error:
-            self.logger.debug('query state of {} with error.'.format(handle, error))
+            self.logger.debug('query state of {} with error {}.'.format(handle, error))
             return
 
         instance_info = self._snapshot_data_by_warden.get(handle)
@@ -239,7 +242,7 @@ class CollectorTask(object):
         'start task'
         notify_rule = re.compile(r'([a-z,0-9]+)-fresh')
         notify_check = notify_rule.findall(notified_dir)
-       
+
         if len(notify_check) > 0:
             self.logger.debug("ignore etcd task trigger event.")
         elif notified_dir == 'snapshot-changed':
