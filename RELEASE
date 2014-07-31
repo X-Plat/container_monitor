@@ -11,4 +11,8 @@
       - speed up the monitor speed;
       - add sync timer for sync with etcd;
       - only update the changed container;
+  - 2.0.3:
+    release: 2014-07-30
+    description:
+      - add collector task;
 
