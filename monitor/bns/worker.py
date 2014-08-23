@@ -25,7 +25,7 @@ class Monitor4BNS(ProcessEvent):
         - clusterid: cluster identificaton id;
         - cluster_suf: cluster name suffix;
     '''
-    def __init__(self, logger, config):
+    def my_init(self, logger, config):
         #TODO: validate the configuration errors
         self.logger = logger
         self.ins_file = config['instance_file']
@@ -37,12 +37,12 @@ class Monitor4BNS(ProcessEvent):
 
     def process_default(self, event):
         'override default processing method'
-        self.logger.debug('Monitor4BNS::process_default')
+        self.logger.debug('[Monitor4BNS]: process_default')
         super(Monitor4BNS, self).process_default(event)
 
     def process_IN_MOVED_TO(self, event):
         'process IN_MOVED_TO events'
-        self.logger.debug('Monitor4BNS::process_IN_MOVED_TO')
+        self.logger.debug('[Monitor4BNS]: process_IN_MOVED_TO')
         super(Monitor4BNS, self).process_default(event)
 
         snapshot = ensure_read_yaml(self.ins_file)
@@ -74,16 +74,16 @@ class Monitor4BNS(ProcessEvent):
             time.sleep(0.5)
             os.rmdir(test_dir)
         except IOError, err:
-            self.logger.warn("Notify etcd task failed with {}".format(err))
+            self.logger.warn("[Monitor4BNS]: Notify etcd task failed with {}".format(err))
         except Exception, err:
-            self.logger.warn("Notify etcd task failed with {}".format(err))
+            self.logger.warn("[Monitor4BNS]: Notify etcd task failed with {}".format(err))
 
     def update_bns_link(self, agent_data):
         """
         generate bns link for instances
         """
         #TODO(jacky): trap exceptions
-        self.logger.info('Starting checking the links.')
+        self.logger.info('[Monitor4BNS]: Starting checking the links.')
         if not os.path.exists(self.bns_base):
             os.makedirs(self.bns_base)
 
@@ -98,7 +98,7 @@ class Monitor4BNS(ProcessEvent):
                 container_path = self.container_base_path + '/' + \
                     ins['warden_handle'] + '/%s' %(self.container_relative_path)
                 if  not os.path.exists(container_path):
-                    self.logger.error(' {} not exist, snapshot staled.'.format(
+                    self.logger.error('[Monitor4BNS]: {} not exist, snapshot staled.'.format(
                         ins['warden_handle']))
                 else:
                     bns_path = self.make_bns_path(ins)
@@ -110,24 +110,24 @@ class Monitor4BNS(ProcessEvent):
                         self.notify_etcd_register(register_dir)
                         os.symlink(container_path, bns_path)
                     elif not os.access(bns_path, os.W_OK):
-                        self.logger.warn('Remove staled link {}'.format(
+                        self.logger.warn('[Monitor4BNS]: Remove staled link {}'.format(
                             bns_path))
                         os.remove(bns_path)
-                        self.logger.info('Recreate symlink for {}-{}.'.format(
+                        self.logger.info('[Monitor4BNS]: Recreate symlink for {}-{}.'.format(
                             ins['application_name'], ins['instance_index']))
                         register_dir = self.container_base_path + '/' + ins['warden_handle'] + '-fresh'
                         self.notify_etcd_register(register_dir)
                         os.symlink(container_path, bns_path)
                     else:
-                        self.logger.warn('link for {}-{} exist, skip!'.format(
+                        self.logger.warn('[Monitor4BNS]: link for {}-{} exist, skip!'.format(
                              ins['application_name'], ins['instance_index']))
 
         extra_links = current_links - required_links
-        self.logger.debug('Extra links %s' %extra_links)
+        self.logger.debug('[Monitor4BNS]: Extra links %s' %extra_links)
 
         if extra_links:
             for extra in extra_links:
-                self.logger.warn('Deleting extra link for %s' %(extra))
+                self.logger.warn('[Monitor4BNS]: Deleting extra link for %s' %(extra))
                 os.remove(extra)
         register_dir = self.container_base_path + '/' + 'snapshot-changed'
         self.notify_etcd_register(register_dir)

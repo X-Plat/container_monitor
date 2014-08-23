@@ -15,11 +15,16 @@ Configs:
 
 CONFIG_ETCD = {
    'task'                      : 'register',
-   'monitor_dir'               : '/tmp/warden/containers',
+   'monitor_dir'               : [ '/tmp/warden/containers' ],
    'base_data_path'            : '/tmp/warden/containers',
-   'backup_dir'                : '/tmp/warden/containers_backup',
+   'backup_dir'                : '/tmp/warden/containers',
    'snapshot_path'             : '/tmp/dea_ng/tmp/dea_ng/db/instances.json',
    'etcd_address'              : 'http://127.0.0.1:4001',
+   'etcd_periodic'             : 300,
+   'collector'                 : 'http://127.0.0.1:4001',
+   'collector_periodic'        : 20,
    'white_list'                :  [ 'tmp' ],
-   'etcd_cluster'              : 'test'
+   'etcd_cluster'              : 'test',
+   'enable_collector'          : True,
+   'stat_periodic'             : 5
 }

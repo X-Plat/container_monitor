@@ -6,9 +6,7 @@ import urllib
 from itertools import count
 from functools import wraps
 import requests, json
-#from monitor.collector.collector_protocol import *
-#from monitor.collector.collector_register import EtcdRegister
-from monitor.collector.dea_data import DeaData
+from monitor.etcd.dea_data import DeaData
 from monitor.common.common import local_ip
 import traceback
 
@@ -27,14 +25,14 @@ Logger = None
 
 def parse_server(addr):
     """
-    Parse etcd server address;
+    Parse collector server address;
     Params
     =====
-    addr: etcd address
+    addr: collector address
 
     Return
     =====
-    (host, port) : etcd host and port ;
+    (host, port) : collector host and port ;
     """
     if not addr:
        return '127.0.0.1', "8003"
@@ -55,7 +53,7 @@ def timecost(func):
         start = time.time()
         ret = func(*args, **kwargs)
         spent_time = time.time() - start
-        Logger.debug("%s time cost: %.3f."%(func.__name__, spent_time))
+        Logger.debug("[COLLECTOR]: %s time cost: %.3f."%(func.__name__, spent_time))
         return ret
     return wrapper
 
@@ -104,7 +102,7 @@ class CollectorTask(object):
     def _refresh_dataset(self):
         """ Refresh the dataset of an collector_task object."""
 
-        self.logger.debug("refreshing dataset.")
+        self.logger.info("[COLLECTOR]: refreshing dataset.")
         self._input = DeaData(self._snapshot_path)
         self._base_dataset = self.base_dataset()
         self._snapshot_data_by_id = self.snapshot_data_by_id()
@@ -117,17 +115,17 @@ class CollectorTask(object):
 
         #Check whether the existence of analysis directories.
         if not os.path.exists(self._base_data_path):
-            self.logger.error("Base data path %s not exists!"%self._base_data_path)
+            self.logger.error("[COLLECTOR]: Base data path %s not exists!"%self._base_data_path)
             return set([])
         backup = []
         if os.path.exists(self._backup_dir):
-            self.logger.debug("list the backup directory {}".format(self._backup_dir))
+            self.logger.info("[COLLECTOR]:list the backup directory {}".format(self._backup_dir))
             backup = os.listdir(self._backup_dir)
         data_list = os.listdir(self._base_data_path)
         data_list.extend(backup)
         #Remove the unuseful directory no responding to containers from dataset
         data_list = [dirn for dirn in data_list if dirn not in self._white_list]
-        self.logger.debug("fetch base dataset succ.")
+        self.logger.info("[COLLECTOR]:fetch base dataset succ.")
         return set(data_list)
 
     def snapshot_data_by_id(self):
@@ -182,7 +180,7 @@ class CollectorTask(object):
         """
         #check in snapshot
         if handle not in self._base_dataset:
-            self.logger.debug("{} not in dataset, unregister it.".format(handle))
+            self.logger.info("[COLLECTOR]: {} not in dataset, unregister it.".format(handle))
             self.unregister_containers_from_collector(handle)
             return
 
@@ -194,16 +192,16 @@ class CollectorTask(object):
         """
         local_state = 'DELETED'
         self.request_collector('state_update', ip=local_ip(), handle=handle, state=local_state)
-        self.logger.debug("container {} state change : {} -> {}".format(handle, 'N/A', local_state))
+        self.logger.info("[COLLECTOR]: container {} state change : {} -> {}".format(handle, 'N/A', local_state))
 
     def update_container_state(self, handle):
         """
         update container state to collector server
         """
         collector_info, error = self.request_collector('state_query', ip=local_ip(), handle=handle)
-        self.logger.debug('query state of {}.'.format(handle))
+        self.logger.info('[COLLECTOR]: query state of {}.'.format(handle))
         if error:
-            self.logger.debug('query state of {} with error {}.'.format(handle, error))
+            self.logger.error('[COLLECTOR]: query state of {} with error {}.'.format(handle, error))
             return
 
         instance_info = self._snapshot_data_by_warden.get(handle)
@@ -216,14 +214,14 @@ class CollectorTask(object):
 
         if not collector_state:
             if not local_state:
-                self.logger.debug('container {} not recorded in local and collector.'.format(handle))
+                self.logger.info('[COLLECTOR]: container {} not recorded in local and collector.'.format(handle))
                 return
             self.request_collector('state_update', ip=local_ip(), handle=handle, state=local_state)
-            self.logger.debug("container {} state change : {} -> {}".format(handle, 'N/A', local_state))
+            self.logger.info("[COLLECTOR]: container {} state change : {} -> {}".format(handle, 'N/A', local_state))
         elif collector_state != 'CRASHED':
             local_state = 'STOPPED'
             self.request_collector('state_update', ip=local_ip(), handle=handle, state=local_state)
-            self.logger.debug("container {} state change : {} -> {}".format(handle, collector_state, local_state))
+            self.logger.info("[COLLECTOR]: container {} state change : {} -> {}".format(handle, collector_state, local_state))
         else:
             pass
 
@@ -232,11 +230,11 @@ class CollectorTask(object):
         """
         push container list to collector
         """
-        self.logger.debug("push container list to collector.")
+        self.logger.info("[COLLECTOR]: push container list to collector.")
         local = local_ip()
         resp, error = self.request_collector('all_containers', ip=local, containers=list(self._base_dataset))
         if error:
-           self.logger.debug("push container list to collector failed with {}".format(error))
+           self.logger.error("[COLLECTOR]: push container list to collector failed with {}".format(error))
 
     def start(self, notified_dir, event):
         'start task'
@@ -244,20 +242,22 @@ class CollectorTask(object):
         notify_check = notify_rule.findall(notified_dir)
 
         if len(notify_check) > 0:
-            self.logger.debug("ignore etcd task trigger event.")
+            self.logger.info("[COLLECTOR]: ignore etcd task trigger event.")
         elif notified_dir == 'snapshot-changed':
             if event == 'create':
                 self._refresh_dataset()
                 self.refresh_inactive_containers()
-                self.logger.debug("refresh inactive containers.")
+                self.logger.info("[COLLECTOR]: refresh inactive containers.")
             else:
-                self.logger.debug("ignore snapshot change clean event.")
+                self.logger.debug("[COLLECTOR]: ignore snapshot change clean event.")
+        elif notified_dir == 'cm-test':
+            pass
         elif notified_dir == 'collector-test':
             if event == 'create':
                 self._refresh_dataset()
                 self.push_container_list()
             else:
-                self.logger.debug("ignore cm-test clean event.")
+                self.logger.debug("[COLLECTOR]: ignore cm-test clean event.")
         else:
             self._refresh_dataset()
             self.update_container(notified_dir)
