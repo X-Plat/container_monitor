@@ -1,11 +1,9 @@
 #!/usr/bin/env python
 # -*- coding: iso-8859-1 -*-
 import os,sys
+import time
 import threading
-from monitor.bns.worker import Monitor4BNS
-from monitor.etcd.worker import Monitor4ETCD
-from monitor.etcd.sync_timer import SyncTimer
-from pyinotify import WatchManager, Notifier, EventsCodes, Stats, ThreadedNotifier
+from pyinotify import WatchManager, Notifier, EventsCodes, Stats, ThreadedNotifier, ExcludeFilter
 
 LIB_PATH = os.path.split(os.getcwd())[0]
 sys.path.append(LIB_PATH)
@@ -14,42 +12,51 @@ from config.conf_common import CONFIG_COMMON
 from config.conf_bns import CONFIG_BNS
 from config.conf_etcd import  CONFIG_ETCD
 
+from monitor.bns.worker import Monitor4BNS
+from monitor.etcd.worker import Monitor4ETCD
+from monitor.etcd.sync_timer import SyncTimer
+
 import logging
 import logging.config
 
 log_conf = CONFIG_COMMON['log_conf']
 logging.config.fileConfig(log_conf)
-logger = logging.getLogger("container_monitor")
+cmlogger = logging.getLogger("container_monitor")
 
-mask = EventsCodes.IN_DELETE | \
-       EventsCodes.IN_CREATE | \
-       EventsCodes.IN_MOVED_TO
+eventscodes = EventsCodes.FLAG_COLLECTIONS['OP_FLAGS']
+
+mask = eventscodes['IN_DELETE'] | \
+       eventscodes['IN_CREATE'] | \
+       eventscodes['IN_MOVED_TO']
 
 snapshot_wm = WatchManager()
 snapshot_stats = Stats()
 snapshot_notifier = ThreadedNotifier(snapshot_wm, Monitor4BNS(
     snapshot_stats,
-    logger=logger,
+    logger=cmlogger,
     config=CONFIG_BNS))
 snapshot_notifier.start()
-snapshot_wm.add_watch(CONFIG_BNS['monitor_dir'], mask, exclude_filter=CONFIG_BNS['white_list'])
+snapshot_excl = ExcludeFilter(CONFIG_BNS['white_list'])
+snapshot_wm.add_watch(CONFIG_BNS['monitor_dir'], mask, exclude_filter=snapshot_excl)
 
 container_wm = WatchManager()
 container_stats = Stats()
 container_notifier = ThreadedNotifier(container_wm, Monitor4ETCD(
     container_stats,
-    logger=logger,
+    logger=cmlogger,
     config=CONFIG_ETCD))
-container_wm.add_watch(CONFIG_ETCD['monitor_dir'], mask, exclude_filter=CONFIG_ETCD['white_list'])
+container_notifier.start()
+container_excl = ExcludeFilter(CONFIG_ETCD['white_list'])
+container_wm.add_watch(CONFIG_ETCD['monitor_dir'], mask, exclude_filter=container_excl)
 
 sync_times = []
-test_dir = config['monitor_dir'] + '/' + 'cm-test'
-etcd_timer = SyncTimer(logger, test_dir, 300)
+test_dir = CONFIG_ETCD['base_data_path'] + '/' + 'cm-test'
+etcd_timer = SyncTimer(cmlogger, test_dir, 300)
 sync_times.append(etcd_timer)
 
-if config['collector_enabled']:
-    test_dir_col = config['monitor_dir'] + '/' + 'collector-test'
-    collector_timer = SyncTimer(logger, test_dir, 20)
+if CONFIG_ETCD['collector_enabled']:
+    test_dir_col = CONFIG_ETCD['base_data_path'] + '/' + 'collector-test'
+    collector_timer = SyncTimer(cmlogger, test_dir_col, 20)
     sync_times.append(collector_timer)
 
 for timer in sync_times:
@@ -57,8 +64,8 @@ for timer in sync_times:
 
 while True:
     try:
-        logger.debug('Monitor4BNS STAT: {}'.format(repr(snapshot_stats)))
-        logger.debug('Monitor4ETCD STAT: {}'.format(repr(container_stats)))
+        cmlogger.debug('[Monitor4BNS] [STAT]: {}'.format(repr(snapshot_stats)))
+        cmlogger.debug('[Monitor4ETCD] [STAT]: {}'.format(repr(container_stats)))
         time.sleep(5)
     except KeyboardInterrupt:
         snapshot_notifier.stop()
