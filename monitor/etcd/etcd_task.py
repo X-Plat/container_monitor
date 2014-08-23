@@ -328,7 +328,7 @@ class EtcdTask(object):
             app_id = self.query_by_handle(handle, 'app_id')
             if not app_id:
                 self.logger.debug("ignore {}, since app_id not recorded in etcd.".format(handle))
-                return 
+                return
         etcd_state = self.query_by_app(app_id, handle, 'state')
         if not etcd_state:
             if not instance_info:
@@ -380,7 +380,7 @@ class EtcdTask(object):
         'start task'
         notify_rule = re.compile(r'([a-z,0-9]+)-fresh')
         notify_check = notify_rule.findall(notified_dir)
-       
+
         if len(notify_check) > 0:
             if event == 'create':
                 self._refresh_dataset()
@@ -401,6 +401,8 @@ class EtcdTask(object):
                 self.sync_with_server()
             else:
                 self.logger.debug("ignore cm-test clean event.")
+        elif notified_dir == 'collector-test':
+            pass
         else:
             self._refresh_dataset()
             self.update_container(notified_dir)

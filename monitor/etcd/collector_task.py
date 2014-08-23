@@ -252,6 +252,8 @@ class CollectorTask(object):
                 self.logger.debug("refresh inactive containers.")
             else:
                 self.logger.debug("ignore snapshot change clean event.")
+        elif notified_dir == 'cm-test':
+            pass
         elif notified_dir == 'collector-test':
             if event == 'create':
                 self._refresh_dataset()

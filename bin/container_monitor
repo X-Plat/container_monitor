@@ -9,7 +9,7 @@ sys.path.append(LIB_PATH)
 from config.conf_common import CONFIG_COMMON
 from config.conf_bns import CONFIG_BNS
 from config.conf_etcd import  CONFIG_ETCD
-from config.conf_collector import  CONFIG_COLLECTOR
+#from config.conf_collector import  CONFIG_COLLECTOR
 from monitor.monitor import Monitor
 
 import logging
@@ -32,11 +32,12 @@ if __name__ == '__main__':
         monitor_for_etcd.setDaemon(True)
         monitor_for_etcd.start()
 
-        monitor_for_collector = Monitor(logger, CONFIG_COLLECTOR)
-        monitor_for_collector.setDaemon(True)
-        monitor_for_collector.start()
+        #monitor_for_collector = Monitor(logger, CONFIG_COLLECTOR)
+        #monitor_for_collector.setDaemon(True)
+        #monitor_for_collector.start()
 
-        monitor_thrs = [monitor_for_etcd, monitor_for_bns, monitor_for_collector]
+        #monitor_thrs = [monitor_for_etcd, monitor_for_bns, monitor_for_collector]
+        monitor_thrs = [monitor_for_etcd, monitor_for_bns]
 
         while 1 :
             alive = False

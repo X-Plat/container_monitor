@@ -1,6 +1,6 @@
 # -*- coding: iso-8859-1 -*-
 '''\
-Class Monitor4ETCD: 
+Class Monitor4ETCD:
     - register container information to remote server;
 
 Attributes:
@@ -11,14 +11,17 @@ Attributes:
 import json
 from pyinotify import ProcessEvent
 from monitor.etcd.etcd_task import EtcdTask
+from monitor.etcd.collector_task import CollectorTask
 
 class Monitor4ETCD(ProcessEvent):
     'register worker for register container information'
-    
+
     def __init__(self, logger, config):
         self._logger = logger
         self._config = config
+        self._collector_enabled = config['collector_enabled']
         self._task = EtcdTask(self._logger, self._config)
+        self._collector_task = CollectorTask(self._logger, self._config)
 
     def dir_to_process(self, event):
         event_info = {}
@@ -35,7 +38,7 @@ class Monitor4ETCD(ProcessEvent):
         else:
             self._logger.debug('ignore useless event.')
             return None
-        
+
     def process_default(self, event):
         """
         override default processing method
@@ -46,7 +49,7 @@ class Monitor4ETCD(ProcessEvent):
 
     def process_IN_DELETE(self, event):
         """
-        process 'IN_DELETE' events 
+        process 'IN_DELETE' events
         """
         self._logger.debug('Monitor4ETCD::process_IN_DELETE')
         super(Monitor4ETCD, self).process_default(event)
@@ -54,6 +57,8 @@ class Monitor4ETCD(ProcessEvent):
         if not container:
             return
         self._task.start(container, 'delete')
+        if self._collector_enabled:
+            self._collector_task.start(container, 'delete')
 
     def process_IN_MOVED_TO(self, event):
         """
@@ -65,6 +70,8 @@ class Monitor4ETCD(ProcessEvent):
         if not container:
             return
         self._task.start(container, 'move')
+        if self._collector_enabled:
+            self._collector_task.start(container, 'move')
 
     def process_IN_CREATE(self, event):
         """
@@ -74,6 +81,8 @@ class Monitor4ETCD(ProcessEvent):
         super(Monitor4ETCD, self).process_default(event)
         container = self.dir_to_process(event)
         if not container:
-            return        
+            return
         self._task.start(container, 'create')
+        if self._collector_enabled:
+            self._collector_task.start(container, 'create')
 

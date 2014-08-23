@@ -20,6 +20,8 @@ CONFIG_ETCD = {
    'backup_dir'                : '/tmp/warden/containers_backup',
    'snapshot_path'             : '/tmp/dea_ng/tmp/dea_ng/db/instances.json',
    'etcd_address'              : 'http://127.0.0.1:4001',
+   'collector'                 : 'http://127.0.0.1:4001',
    'white_list'                :  [ 'tmp' ],
-   'etcd_cluster'              : 'test'
+   'etcd_cluster'              : 'test',
+   'enable_collector'          : True
 }
