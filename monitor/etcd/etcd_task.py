@@ -141,16 +141,16 @@ class EtcdTask(object):
             val = container[para_key]
 
             #update application directory on etcd.
-            self.logger.debug("[ETCD]: set {}:{} to etcd".format(app_key + prefix, val))
+            self.logger.info("[ETCD]: set {}:{} to etcd".format(app_key + prefix, val))
             self._worker.set_key(app_key + prefix, val)
             #update containers directory on etcd.
-            self.logger.debug("[ETCD]: set {}:{} to etcd".format(con_key + prefix, val))
+            self.logger.info("[ETCD]: set {}:{} to etcd".format(con_key + prefix, val))
             self._worker.set_key(con_key + prefix, val)
 
 
         #update agent directory on etcd.
         agent_key = AGENTS_DIR + '/' + container['ip'] + '/' + handle
-        self.logger.debug("[ETCD]: set {}:{} to etcd".format(agent_key, handle))
+        self.logger.info("[ETCD]: set {}:{} to etcd".format(agent_key, handle))
         self._worker.set_key(agent_key, handle)
 
     def query_by_handle(self, handle, key):
@@ -170,10 +170,10 @@ class EtcdTask(object):
         query_resp, _ = self._worker.check_existence(query_key)
 
         if not query_resp:
-            self.logger.debug("[ETCD]: {} not in etcd".format(query_key))
+            self.logger.info("[ETCD]: {} not in etcd".format(query_key))
             return None
         value = query_resp.key.get('value')
-        self.logger.debug("[ETCD]: query {} succ with {} from etcd".format(query_key, value))
+        self.logger.info("[ETCD]: query {} succ with {} from etcd".format(query_key, value))
         return value
 
     def query_by_app(self, app_id, handle, key):
@@ -195,10 +195,10 @@ class EtcdTask(object):
         query_resp, _ = self._worker.check_existence(query_key)
 
         if not query_resp:
-            self.logger.debug("[ETCD]: {} not in etcd".format(query_key))
+            self.logger.info("[ETCD]: {} not in etcd".format(query_key))
             return None
         value = query_resp.key.get('value')
-        self.logger.debug("[ETCD]: get value {} of {} succ with etcd".format(query_key, value))
+        self.logger.info("[ETCD]: get value {} of {} succ with etcd".format(query_key, value))
         return value
 
     def query_handles_by_ip(self, addr):
@@ -217,11 +217,11 @@ class EtcdTask(object):
         query_resp, _ = self._worker.check_existence(query_key,
             recursive='true')
         if not (query_resp and query_resp.key and 'nodes' in query_resp.key):
-            self.logger.debug("[ETCD]: no handle in {}".format(query_key))
+            self.logger.info("[ETCD]: no handle in {}".format(query_key))
             return set([])
 
         handles = [hdl['key'].split('/')[3] for hdl in query_resp[1]['nodes']]
-        self.logger.debug("[ETCD]: get all handles in {}".format(query_key))
+        self.logger.info("[ETCD]: get all handles in {}".format(query_key))
         return set(handles)
 
     def delete_by_app(self, app_id, handle):
@@ -239,7 +239,7 @@ class EtcdTask(object):
         No return.
         """
         query_key = '{}/{}/{}'.format(APPS_DIR, str(app_id), handle)
-        self.logger.debug("[ETCD]: delete {} from etcd".format(query_key))
+        self.logger.info("[ETCD]: delete {} from etcd".format(query_key))
         self._worker.delete_key(query_key)
 
     def delete_by_handle(self, handle):
@@ -256,7 +256,7 @@ class EtcdTask(object):
         No return.
         """
         query_key = '{}/{}'.format(CONTAINERS_DIR, handle)
-        self.logger.debug("[ETCD]: delete {} from etcd.".format(query_key))
+        self.logger.info("[ETCD]: delete {} from etcd.".format(query_key))
         self._worker.delete_key(query_key)
 
     def delete_by_agent(self, handle, agent):
@@ -274,7 +274,7 @@ class EtcdTask(object):
         """
 
         query_key = '{}/{}/{}'.format(AGENTS_DIR, agent, handle)
-        self.logger.debug("[ETCD]: delete {} from etcd.".format(query_key))
+        self.logger.info("[ETCD]: delete {} from etcd.".format(query_key))
         self._worker.delete_key(query_key)
 
     @timecost
@@ -296,7 +296,7 @@ class EtcdTask(object):
         """
         #check in snapshot
         if handle not in self._base_dataset:
-            self.logger.debug("[ETCD]: {} not in dataset, unregister it.".format(handle))
+            self.logger.info("[ETCD]: {} not in dataset, unregister it.".format(handle))
             self.unregister_containers_from_etcd(handle)
             return
 
@@ -308,12 +308,12 @@ class EtcdTask(object):
         """
         app_id = self.query_by_handle(handle, 'app_id')
         if not app_id:
-            self.logger.debug("[ETCD]: app_id of {} not found on  etcd, assuming test event.".format(handle))
+            self.logger.info("[ETCD]: app_id of {} not found on  etcd, assuming test event.".format(handle))
             return
         self.delete_by_handle(handle)
         self.delete_by_app(app_id, handle)
         self.delete_by_agent(handle, local_ip())
-        self.logger.debug("[ETCD]: unregister staled container {} from etcd".format(handle))
+        self.logger.info("[ETCD]: unregister staled container {} from etcd".format(handle))
 
     def update_container_state(self, handle):
         """
@@ -327,15 +327,15 @@ class EtcdTask(object):
             #local_state = 'STOPPED'
             app_id = self.query_by_handle(handle, 'app_id')
             if not app_id:
-                self.logger.debug("[ETCD]: ignore {}, since app_id not recorded in etcd.".format(handle))
+                self.logger.info("[ETCD]: ignore {}, since app_id not recorded in etcd.".format(handle))
                 return
         etcd_state = self.query_by_app(app_id, handle, 'state')
         if not etcd_state:
             if not instance_info:
-                self.logger.debug('[ETCD]: ignore container {} not recorded in snapshot and etcd'.format(handle))
+                self.logger.info('[ETCD]: ignore container {} not recorded in snapshot and etcd'.format(handle))
                 return
             self.register_container_to_app(app_id, handle, instance_info)
-            self.logger.debug("[ETCD]: register container {} to etcd".format(handle))
+            self.logger.info("[ETCD]: register container {} to etcd".format(handle))
         elif etcd_state != 'CRASHED':
             local_state = 'STOPPED'
             current_state_in_apps = '{}/{}/{}/{}'.format(
@@ -344,7 +344,7 @@ class EtcdTask(object):
                 CONTAINERS_DIR, handle, 'state')
             self._worker.set_key(current_state_in_apps, local_state)
             self._worker.set_key(current_state_in_cons, local_state)
-            self.logger.debug("[ETCD]: update state of inactive handle {} to etcd to STOPPED".format(handle))
+            self.logger.info("[ETCD]: update state of inactive handle {} to etcd to STOPPED".format(handle))
         else:
             pass
 
@@ -353,7 +353,7 @@ class EtcdTask(object):
         """
         Compare local data with etcd server, to erease expired records.
         """
-        self.logger.debug("[ETCD]: sync with server.")
+        self.logger.info("[ETCD]: sync with server.")
         local = local_ip()
         handles_in_server = self.query_handles_by_ip(local)
         handles_in_local = self._base_dataset
@@ -370,10 +370,10 @@ class EtcdTask(object):
             instance_info = self._snapshot_data_by_warden.get(handle)
             app_id = instance_info['app_id']
             self.register_container_to_app(app_id, handle, instance_info)
-            self.logger.debug("[ETCD]: register container {} info to etcd".format(handle))
+            self.logger.info("[ETCD]: register container {} info to etcd".format(handle))
 
         for handle in extra:
-            self.logger.debug("[ETCD]: {} not exist any more, delete it".format(handle))
+            self.logger.info("[ETCD]: {} not exist any more, delete it".format(handle))
             self.unregister_containers_from_etcd(handle)
 
     def start(self, notified_dir, event):
@@ -385,14 +385,14 @@ class EtcdTask(object):
             if event == 'create':
                 self._refresh_dataset()
                 self.update_container(notify_check[0])
-                self.logger.debug("[ETCD]: refresh container {} to etcd".format(notify_check[0]))
+                self.logger.info("[ETCD]: refresh container {} to etcd".format(notify_check[0]))
             else:
-                self.logger.debug("[ETCD]: ignore snapshot running clean event.")
+                self.logger.info("[ETCD]: ignore snapshot running clean event.")
         elif notified_dir == 'snapshot-changed':
             if event == 'create':
                 self._refresh_dataset()
                 self.refresh_inactive_containers()
-                self.logger.debug("[ETCD]: refresh inactive containers.")
+                self.logger.info("[ETCD]: refresh inactive containers.")
             else:
                 self.logger.debug("[ETCD]: ignore snapshot change clean event.")
         elif notified_dir == 'cm-test':

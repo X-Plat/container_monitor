@@ -1,9 +1,24 @@
 #!/usr/bin/env python
 # -*- coding: iso-8859-1 -*-
+"""
+ContainerMonitor: Based on pyinotify 0.9.4;
+  - Watch instance snapshot path, update link;
+  - Watch containers path, update container position data;
+  - Statistics;
+"""
+
 import os,sys
 import time
 import threading
-from pyinotify import WatchManager, Notifier, EventsCodes, Stats, ThreadedNotifier, ExcludeFilter
+import logging
+import logging.config
+
+from pyinotify import (WatchManager, 
+        Notifier, 
+        EventsCodes, 
+        Stats, 
+        ThreadedNotifier, 
+        ExcludeFilter)
 
 LIB_PATH = os.path.split(os.getcwd())[0]
 sys.path.append(LIB_PATH)
@@ -16,19 +31,19 @@ from monitor.bns.worker import Monitor4BNS
 from monitor.etcd.worker import Monitor4ETCD
 from monitor.etcd.sync_timer import SyncTimer
 
-import logging
-import logging.config
 
 log_conf = CONFIG_COMMON['log_conf']
 logging.config.fileConfig(log_conf)
 cmlogger = logging.getLogger("container_monitor")
 
+#Container Monitor process create, delete, move events;
 eventscodes = EventsCodes.FLAG_COLLECTIONS['OP_FLAGS']
 
 mask = eventscodes['IN_DELETE'] | \
        eventscodes['IN_CREATE'] | \
        eventscodes['IN_MOVED_TO']
 
+#Create dea snapshot notifier;
 snapshot_wm = WatchManager()
 snapshot_stats = Stats()
 snapshot_notifier = ThreadedNotifier(snapshot_wm, Monitor4BNS(
@@ -36,9 +51,12 @@ snapshot_notifier = ThreadedNotifier(snapshot_wm, Monitor4BNS(
     logger=cmlogger,
     config=CONFIG_BNS))
 snapshot_notifier.start()
+
+#Exclude filelist specified in `white_list` 
 snapshot_excl = ExcludeFilter(CONFIG_BNS['white_list'])
 snapshot_wm.add_watch(CONFIG_BNS['monitor_dir'], mask, exclude_filter=snapshot_excl)
 
+#Create containers notifier
 container_wm = WatchManager()
 container_stats = Stats()
 container_notifier = ThreadedNotifier(container_wm, Monitor4ETCD(
@@ -46,27 +64,34 @@ container_notifier = ThreadedNotifier(container_wm, Monitor4ETCD(
     logger=cmlogger,
     config=CONFIG_ETCD))
 container_notifier.start()
+
+#Exclude filelist specified in `white_list`
 container_excl = ExcludeFilter(CONFIG_ETCD['white_list'])
 container_wm.add_watch(CONFIG_ETCD['monitor_dir'], mask, exclude_filter=container_excl)
 
+#The database should be refreshed periodically by events of test directories;
+#add sync timers to do these periodic tasks;
+#'cm-test': trigger for update etcd database;
+#'collector-test': trigger for update collector database;
 sync_times = []
 test_dir = CONFIG_ETCD['base_data_path'] + '/' + 'cm-test'
-etcd_timer = SyncTimer(cmlogger, test_dir, 300)
+etcd_timer = SyncTimer(cmlogger, test_dir, CONFIG_ETCD['etcd_periodic'])
 sync_times.append(etcd_timer)
 
 if CONFIG_ETCD['collector_enabled']:
     test_dir_col = CONFIG_ETCD['base_data_path'] + '/' + 'collector-test'
-    collector_timer = SyncTimer(cmlogger, test_dir_col, 20)
+    collector_timer = SyncTimer(cmlogger, test_dir_col, CONFIG_ETCD['collector_periodic'])
     sync_times.append(collector_timer)
 
 for timer in sync_times:
     timer.start()
 
+#Create stat thread here;
 while True:
     try:
         cmlogger.debug('[Monitor4BNS] [STAT]: {}'.format(repr(snapshot_stats)))
         cmlogger.debug('[Monitor4ETCD] [STAT]: {}'.format(repr(container_stats)))
-        time.sleep(5)
+        time.sleep(CONFIG_ETCD['stat_periodic'])
     except KeyboardInterrupt:
         snapshot_notifier.stop()
         container_notifier.stop()

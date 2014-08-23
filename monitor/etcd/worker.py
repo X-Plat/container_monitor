@@ -6,7 +6,8 @@ Class Monitor4ETCD:
 Attributes:
     - _logger: logging
     - _config: configure parameters;
-    - _task: task object;
+    - _task: etcd task object;
+    - _collector_task: collector task object;
 '''
 import json
 from pyinotify import ProcessEvent
