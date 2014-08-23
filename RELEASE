@@ -15,4 +15,11 @@
     release: 2014-07-30
     description:
       - add collector task;
-
+  - 3.0.0:
+    release: 2014-08-26
+    description:
+      - use pyinotify thread notifier;
+      - upgrade pyinotify to 0.9.4;
+      - upgrade log level;
+      - erease collector module;
+      - add stats of fs events;
