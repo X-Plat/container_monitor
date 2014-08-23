@@ -2,9 +2,9 @@
 # -*- coding: iso-8859-1 -*-
 import os,sys
 import threading
-from bns.worker import Monitor4BNS
-from etcd.worker import Monitor4ETCD
-from etcd.sync_timer import SyncTimer
+from monitor.bns.worker import Monitor4BNS
+from monitor.etcd.worker import Monitor4ETCD
+from monitor.etcd.sync_timer import SyncTimer
 from pyinotify import WatchManager, Notifier, EventsCodes, Stats, ThreadedNotifier
 
 LIB_PATH = os.path.split(os.getcwd())[0]
