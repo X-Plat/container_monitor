@@ -17,6 +17,7 @@ CONFIG_ETCD = {
    'task'                      : 'register',
    'monitor_dir'               : [ '/tmp/warden/containers' ],
    'base_data_path'            : '/tmp/warden/containers',
+   'backup_dir'                : '/tmp/warden/containers',
    'snapshot_path'             : '/tmp/dea_ng/tmp/dea_ng/db/instances.json',
    'etcd_address'              : 'http://127.0.0.1:4001',
    'etcd_periodic'             : 300,
