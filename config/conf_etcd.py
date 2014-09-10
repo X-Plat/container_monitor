@@ -23,6 +23,7 @@ CONFIG_ETCD = {
    'etcd_periodic'             : 300,
    'collector'                 : 'http://127.0.0.1:4001',
    'collector_periodic'        : 20,
+   'collector_timeout'         : 2,
    'white_list'                :  [ 'tmp' ],
    'etcd_cluster'              : 'test',
    'enable_collector'          : True,

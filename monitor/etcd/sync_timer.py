@@ -13,7 +13,7 @@ import os
 
 class SyncTimer(object):
     "heartbeat between client and server"
-    
+
     def __init__(self, logger, test_dir='cm-test', period=30):
         self.__test_dir = test_dir
         self.__period = period
@@ -32,7 +32,7 @@ class SyncTimer(object):
         except IOError, err:
             self.logger.warn("Create test dir failed with {}".format(err))
         except Exception, err:
-            self.logger.warn("Create test dir failed with {}".format(err))        
+            self.logger.warn("Create test dir failed with {}".format(err))
 
     def create(self):
         "create looping call to send ping request"
@@ -49,7 +49,7 @@ class SyncTimer(object):
     def start(self):
         'start ping timer'
         self.worker.start()
-        
+
     def cancel(self):
         'cancel heartbeat'
         self.worker.join(1)

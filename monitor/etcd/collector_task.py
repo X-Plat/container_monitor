@@ -5,44 +5,10 @@ import os, sys
 import urllib
 from itertools import count
 from functools import wraps
-import requests, json
+from monitor.etcd.collector_register import CollectorRegister
 from monitor.etcd.dea_data import DeaData
 from monitor.common.common import local_ip
 import traceback
-
-#The valid etcd direcotries;
-COLLECTOR_DIR = '/collector'
-
-#This dict given the relationship between snapshot data
-#and etcd data keys;
-REQUEST_METHOD = {
-    'state_update'    : 'post',
-    'state_query'     : 'get',
-    'all_containers'  : 'post'
-}
-
-Logger = None
-
-def parse_server(addr):
-    """
-    Parse collector server address;
-    Params
-    =====
-    addr: collector address
-
-    Return
-    =====
-    (host, port) : collector host and port ;
-    """
-    if not addr:
-       return '127.0.0.1', "8003"
-    try:
-        _, str1 = urllib.splittype(addr)
-        host, _ = urllib.splithost(str1)
-        host, port = urllib.splitport(host)
-    except BaseException:
-        host, port = "127.0.0.1", "8003"
-    return host, int(port)
 
 def timecost(func):
     'record the time cost'
@@ -84,13 +50,14 @@ class CollectorTask(object):
             self._backup_dir = config['backup_dir']
             self._white_list = config['white_list']
 
-            self.collector_ip, self.collector_port = parse_server(config['collector'])
+            self._worker = CollectorRegister(Logger, config['collector'], config['collector_timeout'])
             self._input = None
             self._base_dataset = None
             self._snapshot_data_by_id = None
             self._snapshot_data_by_warden = None
             self._snapshot_dataset_by_warden = None
             self._snapshot_dataset_by_id = None
+            self._collector_timeout = config['collector_timeout']
 
         except BaseException, err:
             err = sys.exc_info()
@@ -145,23 +112,6 @@ class CollectorTask(object):
         return set(self._snapshot_data_by_warden.keys())
 
     @timecost
-    def request_collector(self, action, **args):
-        resp, error = None, None
-        try:
-            headers = {'content-type': 'application/json'}
-            api = '/collector/{}'.format(action)
-            url = 'http://{}:{}{}'.format(self.collector_ip, self.collector_port, api)
-            method = REQUEST_METHOD[action]
-            http_method = getattr(requests, method)
-            raw_resp = http_method(url, data=json.dumps(args), headers=headers)
-            resp = json.loads(raw_resp.text)
-            if resp['rescode'] != 0:
-               error = resp['msg']
-        except BaseException as e:
-            error = e
-        return resp, error
-
-    @timecost
     def refresh_inactive_containers(self):
         """
         refresh CRASHED/STOPPED containers to collector
@@ -191,14 +141,14 @@ class CollectorTask(object):
          Delete staled container
         """
         local_state = 'DELETED'
-        self.request_collector('state_update', ip=local_ip(), handle=handle, state=local_state)
+        self._worker.request_collector('state_update', ip=local_ip(), handle=handle, state=local_state)
         self.logger.info("[COLLECTOR]: container {} state change : {} -> {}".format(handle, 'N/A', local_state))
 
     def update_container_state(self, handle):
         """
         update container state to collector server
         """
-        collector_info, error = self.request_collector('state_query', ip=local_ip(), handle=handle)
+        collector_info, error = self._worker.request_collector('state_query', ip=local_ip(), handle=handle)
         self.logger.info('[COLLECTOR]: query state of {}.'.format(handle))
         if error:
             self.logger.error('[COLLECTOR]: query state of {} with error {}.'.format(handle, error))
@@ -216,11 +166,11 @@ class CollectorTask(object):
             if not local_state:
                 self.logger.info('[COLLECTOR]: container {} not recorded in local and collector.'.format(handle))
                 return
-            self.request_collector('state_update', ip=local_ip(), handle=handle, state=local_state)
+            self._worker.request_collector('state_update', ip=local_ip(), handle=handle, state=local_state)
             self.logger.info("[COLLECTOR]: container {} state change : {} -> {}".format(handle, 'N/A', local_state))
         elif collector_state != 'CRASHED':
             local_state = 'STOPPED'
-            self.request_collector('state_update', ip=local_ip(), handle=handle, state=local_state)
+            self._worker.request_collector('state_update', ip=local_ip(), handle=handle, state=local_state)
             self.logger.info("[COLLECTOR]: container {} state change : {} -> {}".format(handle, collector_state, local_state))
         else:
             pass
@@ -232,7 +182,7 @@ class CollectorTask(object):
         """
         self.logger.info("[COLLECTOR]: push container list to collector.")
         local = local_ip()
-        resp, error = self.request_collector('all_containers', ip=local, containers=list(self._base_dataset))
+        resp, error = self._worker.request_collector('all_containers', ip=local, containers=list(self._base_dataset))
         if error:
            self.logger.error("[COLLECTOR]: push container list to collector failed with {}".format(error))
 
@@ -253,11 +203,7 @@ class CollectorTask(object):
         elif notified_dir == 'cm-test':
             pass
         elif notified_dir == 'collector-test':
-            if event == 'create':
-                self._refresh_dataset()
-                self.push_container_list()
-            else:
-                self.logger.debug("[COLLECTOR]: ignore cm-test clean event.")
+            pass
         else:
             self._refresh_dataset()
             self.update_container(notified_dir)
