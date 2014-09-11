@@ -12,6 +12,7 @@ import time
 import threading
 import logging
 import logging.config
+import re
 
 from pyinotify import (WatchManager, 
         Notifier, 
@@ -29,6 +30,7 @@ from config.conf_etcd import  CONFIG_ETCD
 
 from monitor.bns.worker import Monitor4BNS
 from monitor.etcd.worker import Monitor4ETCD
+from monitor.etcd.error import MonitorException
 from monitor.etcd.sync_timer import SyncTimer
 
 
@@ -87,16 +89,33 @@ for timer in sync_times:
     timer.start()
 
 #Create stat thread here;
+create_events = 0
 while True:
     try:
-        cmlogger.debug('[Monitor4BNS] [STAT]: {}'.format(repr(snapshot_stats)))
-        cmlogger.debug('[Monitor4ETCD] [STAT]: {}'.format(repr(container_stats)))
         time.sleep(CONFIG_ETCD['stat_periodic'])
+        cmlogger.debug('[Monitor4ETCD] [STAT]: {}'.format(repr(container_stats)))
+        cmlogger.debug('[Monitor4BNS] [STAT]: {}'.format(repr(snapshot_stats)))
+        create_events_pre = create_events
+        create_events_group = re.findall(r'IN_CREATE=([0-9]+)',repr(container_stats))
+        if (not create_events_group) or len(create_events_group) > 0:
+            create_events = int(create_events_group[0])
+            delta = create_events - create_events_pre
+            if delta == 0:
+                raise MonitorException("CM EVENTS LOST")
+        else:
+            raise MonitorException("NO EVENTS DETECTED")
     except KeyboardInterrupt:
+        print "User stopped."
         snapshot_notifier.stop()
         container_notifier.stop()
-        break
+        sys.exit(0)
+    except MonitorException:
+        print "Montinor exception, exiting.."
+        snapshot_notifier.stop()
+        container_notifier.stop()
+        sys.exit(1)
     except:
+        print "Exception occured.."
         snapshot_notifier.stop()
         container_notifier.stop()
-        raise
+        sys.exit(1)
