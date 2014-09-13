@@ -34,6 +34,7 @@ class Monitor4BNS(ProcessEvent):
         self.container_base_path = config['container_base_path']
         self.clusterid = config['cluster_id']
         self.clustersuf = config['cluster_suffix']
+        self.matrix_based = config['matrix_based']
 
     def process_default(self, event):
         'override default processing method'
@@ -104,30 +105,33 @@ class Monitor4BNS(ProcessEvent):
                     bns_path = self.make_bns_path(ins)
                     required_links.add(bns_path)
                     if not os.path.islink(bns_path):
-                        self.logger.info('Create symlink for {}-{}.'.format(
-                            ins['application_name'], ins['instance_index']))
+                        if not self.matrix_based:
+                            self.logger.info('Create symlink for {}-{}.'.format(
+                                ins['application_name'], ins['instance_index']))
+                            os.symlink(container_path, bns_path)
                         register_dir = self.container_base_path + '/' + ins['warden_handle'] + '-fresh'
                         self.notify_etcd_register(register_dir)
-                        os.symlink(container_path, bns_path)
                     elif not os.access(bns_path, os.W_OK):
-                        self.logger.warn('[Monitor4BNS]: Remove staled link {}'.format(
-                            bns_path))
-                        os.remove(bns_path)
-                        self.logger.info('[Monitor4BNS]: Recreate symlink for {}-{}.'.format(
-                            ins['application_name'], ins['instance_index']))
+                        if not self.matrix_based:
+                            self.logger.warn('[Monitor4BNS]: Remove staled link {}'.format(
+                                bns_path))
+                            os.remove(bns_path)
+                            self.logger.info('[Monitor4BNS]: Recreate symlink for {}-{}.'.format(
+                                ins['application_name'], ins['instance_index']))
+
+                            os.symlink(container_path, bns_path)
+
                         register_dir = self.container_base_path + '/' + ins['warden_handle'] + '-fresh'
                         self.notify_etcd_register(register_dir)
-                        os.symlink(container_path, bns_path)
-                    else:
+                    elif not self.matrix_based:
                         self.logger.warn('[Monitor4BNS]: link for {}-{} exist, skip!'.format(
                              ins['application_name'], ins['instance_index']))
-
-        extra_links = current_links - required_links
-        self.logger.debug('[Monitor4BNS]: Extra links %s' %extra_links)
-
-        if extra_links:
-            for extra in extra_links:
-                self.logger.warn('[Monitor4BNS]: Deleting extra link for %s' %(extra))
-                os.remove(extra)
+        if not self.matrix_based:
+            extra_links = current_links - required_links
+            self.logger.debug('[Monitor4BNS]: Extra links %s' %extra_links)
+            if extra_links:
+                for extra in extra_links:
+                    self.logger.warn('[Monitor4BNS]: Deleting extra link for %s' %(extra))
+                    os.remove(extra)
         register_dir = self.container_base_path + '/' + 'snapshot-changed'
         self.notify_etcd_register(register_dir)

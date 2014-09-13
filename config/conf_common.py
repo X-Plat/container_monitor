@@ -1,5 +1,5 @@
 '''\
-CONFIG_COMMON: 
+CONFIG_COMMON:
     - common configs;
 
 Configs:

@@ -367,7 +367,8 @@ class EtcdTask(object):
             self.update_container_state(handle)
 
         for handle in missing:
-            instance_info = self._snapshot_data_by_warden.get(handle)
+            handle_base = re.sub('-[0-9]+$', '', handle)
+            instance_info = self._snapshot_data_by_warden.get(handle_base)
             app_id = instance_info['app_id']
             self.register_container_to_app(app_id, handle, instance_info)
             self.logger.info("[ETCD]: register container {} info to etcd".format(handle))

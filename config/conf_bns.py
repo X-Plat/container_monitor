@@ -11,6 +11,7 @@ Configs:
     - container_relative_path: the relative path to instance workspace;
     - cluster_id: the cluster id;
     - bns_cluster: the cluster suffex for bns identification;
+    - matrix_based: matrix_base will change the bns behavior.
     '''
 
 CONFIG_BNS = {
@@ -22,4 +23,5 @@ CONFIG_BNS = {
    'container_relative_path'      : '/tmp/rootfs/',
    'cluster_id'                   : '2',
    'cluster_suffix'               : 'cluster',
+   'matrix_based'                 : False
 }
