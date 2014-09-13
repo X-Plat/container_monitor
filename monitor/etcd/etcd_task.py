@@ -53,6 +53,7 @@ class EtcdTask(object):
             self._backup_dir = config['backup_dir']
             self._white_list = config['white_list']
             self._cluster = config['etcd_cluster']
+            self._matrix_based = config['matrix_based']
 
             self._input = None
             self._base_dataset = None
@@ -103,8 +104,10 @@ class EtcdTask(object):
         return self._input.index_by_kwd('instance_id')
 
     def snapshot_data_by_warden(self):
-        'return the snapshot data by warden_container_path'
-        return self._input.index_by_kwd('warden_handle')
+        'return the snapshot data by warden_container_path or warden_handle'
+        if self._matrix_based:
+            return self._input.index_by_kwd('warden_handle')
+	return self._input.index_by_kwd('warden_container_path')
 
     def snapshot_dataset_by_id(self):
         'return the snapshot keys by instance ids'
@@ -324,13 +327,18 @@ class EtcdTask(object):
             local_state = instance_info['state']
             app_id = instance_info['app_id']
         else:
-            handle_base = re.sub('-[0-9]+$', '', handle)
-            app_id = self.query_by_handle(handle_base, 'app_id')
+	    if self._matrix_based:
+                handle_base = re.sub('-[0-9]+$', '', handle)
+                app_id = self.query_by_handle(handle_base, 'app_id')
+	    else:
+	        app_id = self.query_by_handle(handle, 'app_id')
+
             if not app_id:
                 self.logger.info("[ETCD]: ignore {}, since app_id not recorded in etcd.".format(handle))
                 return
-	    idx = handle_base.split('.')[0]
-	    instance_info = self.make_instance_info(app_id, idx, 'STOPPED', time.time())
+            if self._matrix_based:
+	        idx = handle_base.split('.')[0]
+	        instance_info = self.make_instance_info(app_id, idx, 'STOPPED', time.time())
         etcd_state = self.query_by_app(app_id, handle, 'state')
         if not etcd_state:
             if not instance_info:
@@ -385,14 +393,21 @@ class EtcdTask(object):
             self.update_container_state(handle)
 
         for handle in missing:
-            handle_base = re.sub('-[0-9]+$', '', handle)
-            instance_info = self._snapshot_data_by_warden.get(handle_base)
-	    if not instance_info:
-	        app_id = self.query_by_handle(handle_base, 'app_id')
-                if not app_id:
-                    continue
+	    if self._matrix_based:
+                handle_base = re.sub('-[0-9]+$', '', handle)
+                instance_info = self._snapshot_data_by_warden.get(handle_base)
+	        if not instance_info:
+	            app_id = self.query_by_handle(handle_base, 'app_id')
+                    if not app_id:
+                        continue
 		idx = handle_base.split('.')[0]
 		instance_info = self.make_instance_info(app_id, idx, 'STOPPED', time.time())
+	    else:
+	        instance_info = self._snapshot_data_by_warden.get(handle)
+		if not instance_info:
+		    continue
+		app_id = instance_info['app_id']
+
             self.register_container_to_app(app_id, handle, instance_info)
             self.logger.info("[ETCD]: register container {} info to etcd".format(handle))
 
