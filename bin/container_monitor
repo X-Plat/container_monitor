@@ -38,6 +38,9 @@ log_conf = CONFIG_COMMON['log_conf']
 logging.config.fileConfig(log_conf)
 cmlogger = logging.getLogger("container_monitor")
 
+CONFIG_BNS.update(CONFIG_COMMON)
+CONFIG_ETCD.update(CONFIG_COMMON)
+
 #Container Monitor process create, delete, move events;
 eventscodes = EventsCodes.FLAG_COLLECTIONS['OP_FLAGS']
 

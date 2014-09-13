@@ -21,5 +21,5 @@ CONFIG_BNS = {
    'container_base_path'          : '/tmp/warden/containers',
    'container_relative_path'      : '/tmp/rootfs/',
    'cluster_id'                   : '2',
-   'cluster_suffix'               : 'cluster',
+   'cluster_suffix'               : 'cluster'
 }
