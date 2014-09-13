@@ -104,7 +104,7 @@ class EtcdTask(object):
 
     def snapshot_data_by_warden(self):
         'return the snapshot data by warden_container_path'
-        return self._input.index_by_kwd('warden_container_path')
+        return self._input.index_by_kwd('warden_handle')
 
     def snapshot_dataset_by_id(self):
         'return the snapshot keys by instance ids'
@@ -324,11 +324,13 @@ class EtcdTask(object):
             local_state = instance_info['state']
             app_id = instance_info['app_id']
         else:
-            #local_state = 'STOPPED'
-            app_id = self.query_by_handle(handle, 'app_id')
+            handle_base = re.sub('-[0-9]+$', '', handle)
+            app_id = self.query_by_handle(handle_base, 'app_id')
             if not app_id:
                 self.logger.info("[ETCD]: ignore {}, since app_id not recorded in etcd.".format(handle))
                 return
+	    idx = handle_base.split('.')[0]
+	    instance_info = self.make_instance_info(app_id, idx, 'STOPPED', time.time())
         etcd_state = self.query_by_app(app_id, handle, 'state')
         if not etcd_state:
             if not instance_info:
@@ -347,6 +349,22 @@ class EtcdTask(object):
             self.logger.info("[ETCD]: update state of inactive handle {} to etcd to STOPPED".format(handle))
         else:
             pass
+
+    def make_instance_info(self, app_id, index, state, timestamp):
+        """ 
+        make instance information 
+        """ 
+	info = {
+	    'app_id'            : app_id,
+	    'ip'                : local_ip(),
+	    'warden_host_ip'    : '127.0.0.1',
+	    'instance_id'       : 'N/A',
+	    'instance_index'    : index,
+	    'state'             : state,
+	    'state_timestamp'   : timestamp
+	}
+
+	return info
 
     @timecost
     def sync_with_server(self):
@@ -369,7 +387,12 @@ class EtcdTask(object):
         for handle in missing:
             handle_base = re.sub('-[0-9]+$', '', handle)
             instance_info = self._snapshot_data_by_warden.get(handle_base)
-            app_id = instance_info['app_id']
+	    if not instance_info:
+	        app_id = self.query_by_handle(handle_base, 'app_id')
+                if not app_id:
+                    continue
+		idx = handle_base.split('.')[0]
+		instance_info = self.make_instance_info(app_id, idx, 'STOPPED', time.time())
             self.register_container_to_app(app_id, handle, instance_info)
             self.logger.info("[ETCD]: register container {} info to etcd".format(handle))
 
@@ -379,9 +402,8 @@ class EtcdTask(object):
 
     def start(self, notified_dir, event):
         'start task'
-        notify_rule = re.compile(r'([a-z,0-9]+)-fresh')
+        notify_rule = re.compile(r'([.,a-z,A-Z,\-,_,0-9]+)-fresh')
         notify_check = notify_rule.findall(notified_dir)
-
         if len(notify_check) > 0:
             if event == 'create':
                 self._refresh_dataset()

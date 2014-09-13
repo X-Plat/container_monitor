@@ -12,7 +12,7 @@ class DeaData(object):
     """
     _index_kwd = [
         'instance_id',
-        'warden_container_path'
+        'warden_handle'
     ]
 
     def __init__(self, snapshot_path, cluster='dev'):
