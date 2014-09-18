@@ -114,11 +114,7 @@ while True:
         sys.exit(0)
     except MonitorException:
         print "Montinor exception, exiting.."
-        snapshot_notifier.stop()
-        container_notifier.stop()
         sys.exit(1)
     except:
         print "Exception occured.."
-        snapshot_notifier.stop()
-        container_notifier.stop()
         sys.exit(1)
